@@ -12,24 +12,42 @@ android {
         applicationId = "com.example.swiftgrab"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "0.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
 
     signingConfigs {
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasValue = System.getenv("KEY_ALIAS")
+            val keyPasswordValue = System.getenv("KEY_PASSWORD")
+
+            val keystoreFile = if (!keystorePath.isNullOrBlank()) file(keystorePath) else null
+            val hasValidKeystore = keystoreFile != null &&
+                keystoreFile.exists() &&
+                keystoreFile.isFile &&
+                keystoreFile.length() > 0L &&
+                !keystorePassword.isNullOrBlank() &&
+                !keyAliasValue.isNullOrBlank() &&
+                !keyPasswordValue.isNullOrBlank()
+
+            if (hasValidKeystore) {
+                storeFile = keystoreFile
+                storePassword = keystorePassword
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
             }
         }
     }
@@ -43,7 +61,14 @@ android {
                 "proguard-rules.pro"
             )
             val releaseSigning = signingConfigs.findByName("release")
-            signingConfig = if (releaseSigning?.storeFile != null) {
+            val hasValidReleaseKeystore = releaseSigning?.storeFile?.let {
+                it.exists() && it.isFile && it.length() > 0L
+            } == true &&
+                !releaseSigning.storePassword.isNullOrBlank() &&
+                !releaseSigning.keyAlias.isNullOrBlank() &&
+                !releaseSigning.keyPassword.isNullOrBlank()
+
+            signingConfig = if (hasValidReleaseKeystore) {
                 releaseSigning
             } else {
                 signingConfigs.getByName("debug")

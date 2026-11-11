@@ -38,7 +38,7 @@ Terima kasih atas minat Anda untuk berkontribusi pada **SwiftGrab**! Proyek ini 
 
 ## 4. Aturan Penulisan Kode (Architecture Guidelines)
 
-Sebelum mengajukan *Pull Request* (PR), pastikan kode Anda mengikuti panduan standar di [`AGENTS.md`](./AGENTS.md) dan [`DESIGN.md`](./DESIGN.md):
+Sebelum mengajukan *Pull Request* (PR), pastikan kode Anda mengikuti panduan standar di [`AGENTS.md`](./AGENTS.md), [`DESIGN.md`](./DESIGN.md), dan blueprint arsitektur di [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md):
 
 ### A. Jetpack Compose & UI
 * **Unidirectional Data Flow (UDF):** Seluruh composable layar harus *stateless* (menerima state dan memancarkan event).

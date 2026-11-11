@@ -70,7 +70,7 @@ Dibangun menggunakan **Jetpack Compose** dan **Material Design 3 (M3)**, SwiftGr
 
 ## 🏛 Tabel Arsitektur Aplikasi
 
-SwiftGrab mengadopsi pola arsitektur **Clean Architecture + Unidirectional Data Flow (UDF)** yang kokoh:
+SwiftGrab mengadopsi pola arsitektur **Clean Architecture + Unidirectional Data Flow (UDF)** yang kokoh. Blueprint implementasi teknis lengkap dapat dilihat di [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
 
 | Lapisan (Layer) | Modul & Paket | Teknologi Utama | Peran & Tanggung Jawab |
 | :--- | :--- | :--- | :--- |
@@ -86,7 +86,7 @@ SwiftGrab mengadopsi pola arsitektur **Clean Architecture + Unidirectional Data 
 
 ### 1. Unduh Langsung via GitHub Releases
 1. Buka halaman [Releases Terbaru](https://github.com/madhasoeki/SwiftGrab/releases/latest).
-2. Unduh berkas `SwiftGrab-v0.0.1.apk` (atau versi rilis terbaru).
+2. Unduh berkas `SwiftGrab-v0.0.2-arm64-v8a.apk` untuk perangkat Android modern (ukuran lebih ringan) atau `SwiftGrab-v0.0.2-universal.apk` jika tidak yakin dengan arsitektur perangkat.
 3. Buka berkas APK di perangkat Android Anda dan izinkan instalasi dari sumber tidak dikenal jika diminta.
 
 ### 2. Pembaruan Otomatis via Obtainium (Direkomendasikan)
@@ -125,13 +125,13 @@ SwiftGrab sepenuhnya kompatibel dengan [Obtainium](https://github.com/ImranR98/O
    ```bash
    ./gradlew assembleDebug
    ```
-   *Berkas APK akan berada di:* `app/build/outputs/apk/debug/app-debug.apk`
+   *Berkas APK hasil split ABI akan berada di direktori:* `app/build/outputs/apk/debug/` (mis. `app-arm64-v8a-debug.apk`, `app-universal-debug.apk`).
 
 4. Kompilasi APK Release (dioptimalkan dengan R8 & shrinking):
    ```bash
    ./gradlew assembleRelease
    ```
-   *Berkas APK akan berada di:* `app/build/outputs/apk/release/app-release.apk`
+   *Berkas APK hasil split ABI akan berada di direktori:* `app/build/outputs/apk/release/` (mis. `app-arm64-v8a-release.apk`, `app-universal-release.apk`).
 
 ---
 

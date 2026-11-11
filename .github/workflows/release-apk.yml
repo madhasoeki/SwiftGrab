@@ -62,8 +62,16 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/release.jks"
-            echo "KEYSTORE_PATH=${{ runner.temp }}/release.jks" >> "$GITHUB_ENV"
+            echo "Decoding release keystore from KEYSTORE_BASE64..."
+            if echo "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "${{ runner.temp }}/release.jks" 2>/dev/null && [ -s "${{ runner.temp }}/release.jks" ]; then
+              echo "KEYSTORE_PATH=${{ runner.temp }}/release.jks" >> "$GITHUB_ENV"
+              echo "Keystore successfully decoded to ${{ runner.temp }}/release.jks"
+            else
+              rm -f "${{ runner.temp }}/release.jks"
+              echo "Decoded keystore is invalid or empty. Proceeding with fallback debug signing."
+            fi
+          else
+            echo "KEYSTORE_BASE64 secret is not configured or empty. Proceeding with fallback debug signing."
           fi
 
       - name: Build Release APK
@@ -78,23 +86,34 @@ jobs:
         run: |
           TAG="${{ steps.vars.outputs.tag }}"
           mkdir -p release-assets
-          
-          # Copy release APK
-          cp app/build/outputs/apk/release/app-release.apk "release-assets/SwiftGrab-${TAG}.apk"
-          
-          # Generate SHA256 checksum
+
+          # Copy per-architecture split APKs and universal APK
+          for apk in app/build/outputs/apk/release/*.apk; do
+            [ -e "$apk" ] || continue
+            filename=$(basename "$apk")
+            if [ "$filename" = "app-release.apk" ]; then
+              cp "$apk" "release-assets/SwiftGrab-${TAG}.apk"
+            else
+              abi=$(echo "$filename" | sed -E 's/app-(.*)-release\.apk/\1/')
+              cp "$apk" "release-assets/SwiftGrab-${TAG}-${abi}.apk"
+            fi
+          done
+
+          ls -lh release-assets/
+
+          # Generate SHA256 checksums
           cd release-assets
-          sha256sum "SwiftGrab-${TAG}.apk" > checksums.txt
+          sha256sum *.apk > checksums.txt
           cat checksums.txt
           cd ..
 
       - name: Publish to GitHub Releases
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: SwiftGrab ${{ steps.vars.outputs.tag }}
           files: |
-            release-assets/SwiftGrab-${{ steps.vars.outputs.tag }}.apk
+            release-assets/*.apk
             release-assets/checksums.txt
           generate_release_notes: true
           draft: false
