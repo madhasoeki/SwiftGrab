@@ -48,6 +48,12 @@
     <string name="settings_auto_clipboard">Deteksi Papan Klip Otomatis</string>
     <string name="settings_auto_clipboard_desc">Otomatis mulai unduhan saat membuka aplikasi jika ada tautan baru di papan klip</string>
     <string name="settings_storage_dir">Folder Penyimpanan</string>
+    <string name="settings_storage_dir_hint">Ketuk untuk memilih folder lain</string>
+    <string name="settings_storage_dir_custom">Folder Kustom (Ketuk untuk ubah)</string>
+    <string name="settings_storage_dir_reset">Kembalikan ke folder default</string>
+    <string name="toast_storage_dir_updated">Folder penyimpanan diubah: %s</string>
+    <string name="toast_storage_dir_reset">Folder penyimpanan dikembalikan ke default</string>
+    <string name="toast_storage_dir_error">Gagal mengakses folder yang dipilih. Menggunakan folder default.</string>
     <string name="settings_ytdlp_update">Pembaruan Ekstraktor (yt-dlp)</string>
     <string name="settings_ytdlp_version">Versi yt-dlp: %s</string>
     <string name="btn_check_ytdlp_update">Periksa Pembaruan yt-dlp</string>

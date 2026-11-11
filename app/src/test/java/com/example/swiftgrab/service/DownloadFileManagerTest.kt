@@ -58,4 +58,62 @@ class DownloadFileManagerTest {
         stagingDir.deleteRecursively()
         assertFalse(stagingDir.exists())
     }
+
+    @Test
+    fun `resolveDownloadDir uses custom path when valid and falls back to default`() {
+        val defaultPublicDir = tempFolder.newFolder("PublicDownloads", "SwiftGrab")
+        val customFolder = tempFolder.newFolder("CustomFolder")
+
+        val resolvedCustom = DownloadFileManager.resolveDownloadDir(
+            customPath = customFolder.absolutePath,
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(customFolder.absolutePath, resolvedCustom.absolutePath)
+
+        val resolvedDefault = DownloadFileManager.resolveDownloadDir(
+            customPath = null,
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(defaultPublicDir.absolutePath, resolvedDefault.absolutePath)
+
+        val resolvedBlank = DownloadFileManager.resolveDownloadDir(
+            customPath = "   ",
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(defaultPublicDir.absolutePath, resolvedBlank.absolutePath)
+    }
+
+    @Test
+    fun `buildUniqueTargetFile preserves non-existing file name and appends timestamp on conflict`() {
+        val targetDir = tempFolder.newFolder("target_dir")
+        val newFile = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video.mp4", newFile.name)
+
+        // Simulate conflict
+        File(targetDir, "video.mp4").writeText("exists")
+        val conflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video_99999.mp4", conflicted.name)
+
+        // Conflict without extension
+        File(targetDir, "audiofile").writeText("audio")
+        val conflictedNoExt = DownloadFileManager.buildUniqueTargetFile(targetDir, "audiofile", 88888L)
+        assertEquals("audiofile_88888", conflictedNoExt.name)
+    }
+
+    @Test
+    fun `findCompletedMediaFile ignores intermediate download files`() {
+        val staging = tempFolder.newFolder("staging_test")
+        File(staging, "track.mp3.part").writeText("part")
+        File(staging, "track.mp3.aria2").writeText("aria2")
+        File(staging, "track.mp3.ytdl").writeText("ytdl")
+        File(staging, "track.mp3.temp").writeText("temp")
+
+        val foundBefore = DownloadFileManager.findCompletedMediaFile(staging)
+        assertEquals(null, foundBefore)
+
+        val completeMedia = File(staging, "track.mp3").apply { writeText("audio-data") }
+        val foundAfter = DownloadFileManager.findCompletedMediaFile(staging)
+        assertNotNull(foundAfter)
+        assertEquals(completeMedia.absolutePath, foundAfter?.absolutePath)
+    }
 }

@@ -7,11 +7,30 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import java.io.File
 
 object FileSharingHelper {
 
     fun openFile(context: Context, filePath: String) {
+        if (filePath.startsWith("content://")) {
+            val uri = filePath.toUri()
+            val mimeType = context.contentResolver.getType(uri) ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, "Tidak ada aplikasi untuk memutar berkas ini", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Gagal membuka berkas: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         val file = File(filePath)
         if (!file.exists()) {
             Toast.makeText(context, "Berkas tidak ditemukan di penyimpanan", Toast.LENGTH_SHORT).show()
@@ -40,6 +59,25 @@ object FileSharingHelper {
     }
 
     fun shareFile(context: Context, filePath: String) {
+        if (filePath.startsWith("content://")) {
+            val uri = filePath.toUri()
+            val mimeType = context.contentResolver.getType(uri) ?: "*/*"
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Bagikan berkas via").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(chooser)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         val file = File(filePath)
         if (!file.exists()) {
             Toast.makeText(context, "Berkas tidak ditemukan", Toast.LENGTH_SHORT).show()

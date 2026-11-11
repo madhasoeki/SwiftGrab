@@ -252,9 +252,10 @@ class DownloadForegroundService : Service() {
             }
 
             // Download completed successfully
-            val completedFile = DownloadFileManager.finalizeCompletedFile(this, taskId)
-            val finalPath = completedFile?.absolutePath ?: ""
-            val finalSize = completedFile?.length() ?: latestTotalBytes
+            val completed = DownloadFileManager.finalizeCompletedMedia(this, taskId)
+            val finalPath = completed?.outputPath ?: ""
+            val finalSize = completed?.fileSize ?: latestTotalBytes
+            val completedFile = completed?.file
             if (completedFile != null && latestTitle == task.url) {
                 val baseName = completedFile.nameWithoutExtension
                 val cleanTitle = if (baseName.contains(" [")) baseName.substringBeforeLast(" [") else baseName
@@ -262,6 +263,14 @@ class DownloadForegroundService : Service() {
                     latestTitle = cleanTitle
                     repository.updateMetadata(taskId, cleanTitle, task.thumbnailUrl, task.formatLabel)
                 }
+            }
+
+            // Memastikan MediaScannerConnection dipanggil agar video/audio langsung otomatis
+            // muncul di Galeri HP dan aplikasi Pemutar Musik/Video
+            if (completedFile != null && completedFile.exists()) {
+                DownloadFileManager.scanMediaFile(this, completedFile)
+            } else if (finalPath.startsWith("/") && File(finalPath).exists()) {
+                DownloadFileManager.scanMediaFile(this, File(finalPath))
             }
 
             repository.markCompleted(taskId, finalPath, finalSize)
