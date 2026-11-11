@@ -19,7 +19,7 @@ Jelaskan bug secara singkat dan jelas.
 Jelaskan apa yang seharusnya terjadi.
 
 ### Lingkungan Perangkat
-- **Versi SwiftGrab:** (mis. v1.0.0)
+- **Versi SwiftGrab:** (mis. v0.0.1)
 - **Versi yt-dlp (lihat di Pengaturan):** (mis. 2026.xx.xx)
 - **Model Perangkat:** (mis. Pixel 7, Samsung S23)
 - **Versi Android:** (mis. Android 14 / Android 15)
