@@ -13,20 +13,24 @@ import android.webkit.MimeTypeMap
 import androidx.core.net.toUri
 import com.example.swiftgrab.SwiftGrabApp
 import com.example.swiftgrab.data.prefs.UserPreferences
+import com.example.swiftgrab.util.StorageHelper
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 
 data class FinalizedDownload(
     val outputPath: String,
     val fileSize: Long,
-    val file: File? = null
+    val file: File? = null,
+    val displayName: String = ""
 )
 
 object DownloadFileManager {
 
     private const val TAG = "DownloadFileManager"
     private const val FOLDER_NAME = "SwiftGrab"
+    private val exportLock = Any()
 
     /**
      * Direktori publik bawaan untuk unduhan SwiftGrab:
@@ -78,17 +82,23 @@ object DownloadFileManager {
 
     /**
      * Direktori staging per tugas untuk mengisolasi berkas sementara (.part, .aria2, .ytdl).
-     * Disimpan di penyimpanan internal aplikasi agar yt-dlp dan aria2c selalu memiliki izin tulis penuh.
+     * Disimpan di penyimpanan internal aplikasi agar yt-dlp dan aria2c selalu memiliki izin tulis penuh,
+     * dengan fallback ke tata letak staging lama agar tugas yang dijeda sebelum pembaruan tetap bisa dilanjutkan.
      */
     fun getStagingDir(context: Context, taskId: String): File {
-        val legacyDownloadStaging = File(getDownloadDir(context), ".staging_$taskId")
+        val legacyDownloadStaging = safeStagingDir(getDownloadDir(context), taskId)
         if (legacyDownloadStaging.exists()) {
             return legacyDownloadStaging
         }
 
-        val stagingBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: File(context.filesDir, "downloads")
-        val staging = File(stagingBase, "staging/.staging_$taskId")
+        val previousLayoutStaging = safeStagingDir(File(appDownloadsBase, FOLDER_NAME), taskId)
+        if (previousLayoutStaging.exists()) {
+            return previousLayoutStaging
+        }
+
+        val staging = safeStagingDir(File(appDownloadsBase, "staging"), taskId)
         if (!staging.exists()) {
             staging.mkdirs()
         }
@@ -100,11 +110,12 @@ object DownloadFileManager {
      */
     fun cleanupTemporaryFiles(context: Context, taskId: String) {
         try {
-            val stagingBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: File(context.filesDir, "downloads")
             val dirsToDelete = listOf(
-                File(stagingBase, "staging/.staging_$taskId"),
-                File(getDownloadDir(context), ".staging_$taskId")
+                safeStagingDir(File(appDownloadsBase, "staging"), taskId),
+                safeStagingDir(File(appDownloadsBase, FOLDER_NAME), taskId),
+                safeStagingDir(getDownloadDir(context), taskId)
             )
             for (stagingDir in dirsToDelete) {
                 if (stagingDir.exists()) {
@@ -127,26 +138,52 @@ object DownloadFileManager {
         }
     }
 
+    internal fun safeStagingDir(baseDir: File, taskId: String): File {
+        require(taskId.isNotBlank() && !taskId.contains('/') && !taskId.contains('\\') && !taskId.contains("..")) {
+            "Invalid taskId for staging directory"
+        }
+        val child = File(baseDir, ".staging_$taskId")
+        val baseCanonical = baseDir.canonicalFile
+        val childCanonical = child.canonicalFile
+        require(childCanonical.parentFile == baseCanonical) {
+            "Staging directory escaped base directory"
+        }
+        return child
+    }
+
     /**
      * Memindahkan berkas media selesai ke direktori unduhan akhir dan memicu pemindaian media.
      */
     fun finalizeCompletedFile(context: Context, taskId: String): File? {
-        return finalizeCompletedMedia(context, taskId)?.file
+        return try {
+            finalizeCompletedMedia(context, taskId)?.file
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to finalize completed file for task: $taskId", e)
+            null
+        }
     }
 
     /**
      * Menemukan berkas media selesai di direktori staging, memindahkannya ke folder penyimpanan
      * publik atau folder SAF pilihan pengguna, serta memindainya ke MediaStore.
+     *
+     * Catatan: Ekspor ke SAF penyedia dokumen non-lokal bergantung pada pengindeksan penyedia,
+     * sedangkan ekspor ke MediaStore.Downloads otomatis terindeks ketika IS_PENDING diubah ke 0.
+     *
+     * @throws IOException jika seluruh jalur ekspor gagal sehingga tugas tidak ditandai selesai palsu.
      */
+    @Throws(IOException::class)
     fun finalizeCompletedMedia(context: Context, taskId: String): FinalizedDownload? {
-        val stagingBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: File(context.filesDir, "downloads")
-        val stagingDir = File(stagingBase, "staging/.staging_$taskId").takeIf { it.exists() }
-            ?: File(getDownloadDir(context), ".staging_$taskId").takeIf { it.exists() }
+        val stagingDir = safeStagingDir(File(appDownloadsBase, "staging"), taskId).takeIf { it.exists() }
+            ?: safeStagingDir(File(appDownloadsBase, FOLDER_NAME), taskId).takeIf { it.exists() }
+            ?: safeStagingDir(getDownloadDir(context), taskId).takeIf { it.exists() }
             ?: return null
 
         val completed = findCompletedMediaFile(stagingDir) ?: return null
         val fileSize = completed.length()
+        val displayName = completed.name
 
         val prefs = try {
             (context.applicationContext as? SwiftGrabApp)?.userPreferences
@@ -157,7 +194,6 @@ object DownloadFileManager {
         val customPath = prefs?.getCustomDownloadPath()
         val customUriStr = prefs?.getCustomDownloadUri()
         val targetDir = getDownloadDir(context)
-        val targetFile = buildUniqueTargetFile(targetDir, completed.name)
 
         // 1. Jika pengguna memilih folder SAF tanpa path berkas fisik langsung, tulis via SAF
         if (!customUriStr.isNullOrBlank() && customPath.isNullOrBlank()) {
@@ -165,28 +201,41 @@ object DownloadFileManager {
             val docUri = copyToSafTreeUri(context, completed, treeUri)
             if (docUri != null) {
                 stagingDir.deleteRecursively()
-                return FinalizedDownload(
-                    outputPath = docUri.toString(),
-                    fileSize = fileSize,
-                    file = null
-                )
+                return buildSafFinalizedResult(context, docUri, fileSize, displayName)
             }
         }
 
-        // 2. Coba pindahkan langsung ke File target (Download/SwiftGrab atau folder path SAF)
-        val directMoved: File? = try {
-            if (!targetDir.exists()) {
-                targetDir.mkdirs()
+        // 2. Coba pindahkan langsung ke File target (Download/SwiftGrab atau folder path SAF) secara atomik
+        val directMoved: File? = run {
+            var allocatedTarget: File? = null
+            try {
+                if (!targetDir.exists()) {
+                    targetDir.mkdirs()
+                }
+                val targetFile = reserveUniqueTargetFile(targetDir, completed.name)
+                allocatedTarget = targetFile
+                val moved = if (completed.renameTo(targetFile)) {
+                    targetFile
+                } else {
+                    copyAndDelete(completed, targetFile)
+                }
+                if (moved.exists() && moved.length() > 0L && (fileSize <= 0L || moved.length() == fileSize)) {
+                    moved
+                } else {
+                    if (completed.exists()) {
+                        allocatedTarget.delete()
+                    }
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Direct file move failed for ${targetDir.absolutePath}: ${e.message}")
+                allocatedTarget?.let {
+                    if (it.exists() && completed.exists()) {
+                        it.delete()
+                    }
+                }
+                null
             }
-            val moved = if (completed.renameTo(targetFile)) {
-                targetFile
-            } else {
-                copyAndDelete(completed, targetFile)
-            }
-            if (moved.exists() && moved.length() > 0L) moved else null
-        } catch (e: Exception) {
-            Log.w(TAG, "Direct file move failed for ${targetFile.absolutePath}: ${e.message}")
-            null
         }
 
         if (directMoved != null) {
@@ -195,7 +244,8 @@ object DownloadFileManager {
             return FinalizedDownload(
                 outputPath = directMoved.absolutePath,
                 fileSize = directMoved.length().takeIf { it > 0L } ?: fileSize,
-                file = directMoved
+                file = directMoved,
+                displayName = displayName
             )
         }
 
@@ -205,51 +255,95 @@ object DownloadFileManager {
             val docUri = copyToSafTreeUri(context, completed, treeUri)
             if (docUri != null) {
                 stagingDir.deleteRecursively()
-                val possiblePhysicalFile = File(targetDir, completed.name)
-                if (possiblePhysicalFile.exists()) {
-                    scanMediaFile(context, possiblePhysicalFile)
-                    return FinalizedDownload(
-                        outputPath = possiblePhysicalFile.absolutePath,
-                        fileSize = possiblePhysicalFile.length().takeIf { it > 0L } ?: fileSize,
-                        file = possiblePhysicalFile
-                    )
-                }
-                return FinalizedDownload(
-                    outputPath = docUri.toString(),
-                    fileSize = fileSize,
-                    file = null
-                )
+                return buildSafFinalizedResult(context, docUri, fileSize, displayName)
             }
         }
 
         // 4. Fallback ke MediaStore.Downloads (Android 10+) jika penulisan File langsung dibatasi Scoped Storage
-        val mediaStoreUri = copyToMediaStoreDownloads(context, completed)
-        if (mediaStoreUri != null) {
-            stagingDir.deleteRecursively()
-            val expectedPublicFile = File(getDefaultDownloadDir(), completed.name)
-            if (expectedPublicFile.exists()) {
-                scanMediaFile(context, expectedPublicFile)
+        if (customUriStr.isNullOrBlank()) {
+            val mediaStoreUri = copyToMediaStoreDownloads(context, completed)
+            if (mediaStoreUri != null) {
+                stagingDir.deleteRecursively()
+                val resolvedPath = resolveMediaStoreFilePath(context, mediaStoreUri)
+                if (resolvedPath != null) {
+                    val mediaFile = File(resolvedPath)
+                    if (mediaFile.exists() && mediaFile.length() > 0L && (fileSize <= 0L || mediaFile.length() == fileSize)) {
+                        scanMediaPath(context, mediaFile.absolutePath)
+                        if (mediaFile.canRead()) {
+                            return FinalizedDownload(
+                                outputPath = mediaFile.absolutePath,
+                                fileSize = mediaFile.length(),
+                                file = mediaFile,
+                                displayName = displayName
+                            )
+                        }
+                    } else if (resolvedPath.startsWith("/")) {
+                        scanMediaPath(context, resolvedPath)
+                    }
+                }
                 return FinalizedDownload(
-                    outputPath = expectedPublicFile.absolutePath,
-                    fileSize = expectedPublicFile.length().takeIf { it > 0L } ?: fileSize,
-                    file = expectedPublicFile
+                    outputPath = mediaStoreUri.toString(),
+                    fileSize = fileSize,
+                    file = null,
+                    displayName = displayName
                 )
             }
-            return FinalizedDownload(
-                outputPath = mediaStoreUri.toString(),
-                fileSize = fileSize,
-                file = null
-            )
         }
 
-        // Fallback terakhir: pertahankan di lokasi staging jika seluruh ekspor gagal
-        Log.e(TAG, "All export attempts failed; keeping file at ${completed.absolutePath}")
-        scanMediaFile(context, completed)
+        // Seluruh ekspor gagal: pertahankan berkas di staging dan laporkan kegagalan agar dapat dicoba lagi
+        Log.e(TAG, "All export attempts failed; preserving staged file at ${completed.absolutePath}")
+        throw IOException("Gagal mengekspor berkas ke folder penyimpanan tujuan. Periksa izin penyimpanan atau pilih folder melalui Pengaturan.")
+    }
+
+    private fun buildSafFinalizedResult(
+        context: Context,
+        docUri: Uri,
+        fallbackSize: Long,
+        displayName: String
+    ): FinalizedDownload {
+        val resolvedPath = StorageHelper.resolvePathFromDocumentUri(context, docUri)
+        if (resolvedPath != null) {
+            // Pindai hanya jika URI SAF dipetakan ke path sistem berkas lokal (bukan content:// URI).
+            scanMediaPath(context, resolvedPath)
+            val resolvedFile = File(resolvedPath)
+            if (resolvedFile.exists() && resolvedFile.canRead() && resolvedFile.length() > 0L && (fallbackSize <= 0L || resolvedFile.length() == fallbackSize)) {
+                return FinalizedDownload(
+                    outputPath = resolvedFile.absolutePath,
+                    fileSize = resolvedFile.length(),
+                    file = resolvedFile,
+                    displayName = displayName
+                )
+            }
+        }
+        // Ekspor SAF ke penyedia non-lokal tanpa path fisik tidak dipindai dengan MediaScannerConnection
+        // karena MediaScanner hanya menerima path lokal; berkas mengandalkan pengindeksan penyedia SAF.
         return FinalizedDownload(
-            outputPath = completed.absolutePath,
-            fileSize = fileSize,
-            file = completed
+            outputPath = docUri.toString(),
+            fileSize = fallbackSize,
+            file = null,
+            displayName = displayName
         )
+    }
+
+    private fun resolveMediaStoreFilePath(context: Context, uri: Uri): String? {
+        return try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DATA),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val colIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    if (colIdx >= 0) cursor.getString(colIdx) else null
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -262,17 +356,29 @@ object DownloadFileManager {
         onScanCompleted: ((path: String, uri: Uri?) -> Unit)? = null
     ) {
         if (!file.exists()) return
+        scanMediaPath(context, file.absolutePath, onScanCompleted)
+    }
+
+    /**
+     * Memindai path sistem berkas lokal (bukan URI `content://`) menggunakan [MediaScannerConnection.scanFile].
+     */
+    fun scanMediaPath(
+        context: Context,
+        localPath: String,
+        onScanCompleted: ((path: String, uri: Uri?) -> Unit)? = null
+    ) {
+        if (!localPath.startsWith("/")) return
         try {
             MediaScannerConnection.scanFile(
                 context.applicationContext,
-                arrayOf(file.absolutePath),
+                arrayOf(localPath),
                 null
             ) { path, uri ->
                 Log.i(TAG, "MediaScannerConnection scanned completed file: $path -> $uri")
                 onScanCompleted?.invoke(path, uri)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error calling MediaScannerConnection.scanFile for ${file.absolutePath}", e)
+            Log.e(TAG, "Error calling MediaScannerConnection.scanFile for $localPath", e)
         }
     }
 
@@ -288,6 +394,9 @@ object DownloadFileManager {
         return mediaFiles.maxByOrNull { it.lastModified() }
     }
 
+    /**
+     * Memilih nama berkas target unik secara non-destruktif tanpa menimpa berkas yang sudah ada.
+     */
     internal fun buildUniqueTargetFile(
         targetDir: File,
         fileName: String,
@@ -296,24 +405,74 @@ object DownloadFileManager {
         val rawTarget = File(targetDir, fileName)
         if (!rawTarget.exists()) return rawTarget
         val dotIndex = fileName.lastIndexOf('.')
-        val uniqueName = if (dotIndex > 0) {
-            val nameWithoutExt = fileName.substring(0, dotIndex)
-            val ext = fileName.substring(dotIndex + 1)
-            "${nameWithoutExt}_$timestamp.$ext"
-        } else {
-            "${fileName}_$timestamp"
+        val nameWithoutExt = if (dotIndex > 0) fileName.substring(0, dotIndex) else fileName
+        val extSuffix = if (dotIndex > 0) ".${fileName.substring(dotIndex + 1)}" else ""
+
+        var counter = 0
+        while (true) {
+            val suffix = if (counter == 0) "_$timestamp" else "_${timestamp}_$counter"
+            val candidate = File(targetDir, "$nameWithoutExt$suffix$extSuffix")
+            if (!candidate.exists()) {
+                return candidate
+            }
+            counter++
         }
-        return File(targetDir, uniqueName)
+    }
+
+    /**
+     * Mengalokasikan dan memesan berkas target unik secara atomik (`createNewFile`) agar
+     * ekspor paralel dengan nama berkas sama tidak saling menimpa.
+     */
+    @Throws(IOException::class)
+    internal fun reserveUniqueTargetFile(
+        targetDir: File,
+        fileName: String,
+        timestampProvider: () -> Long = { System.currentTimeMillis() }
+    ): File {
+        synchronized(exportLock) {
+            val rawTarget = File(targetDir, fileName)
+            if (rawTarget.createNewFile()) {
+                return rawTarget
+            }
+
+            val dotIndex = fileName.lastIndexOf('.')
+            val nameWithoutExt = if (dotIndex > 0) fileName.substring(0, dotIndex) else fileName
+            val extSuffix = if (dotIndex > 0) ".${fileName.substring(dotIndex + 1)}" else ""
+            val timestamp = timestampProvider()
+
+            var counter = 0
+            while (true) {
+                val suffix = if (counter == 0) "_$timestamp" else "_${timestamp}_$counter"
+                val candidate = File(targetDir, "$nameWithoutExt$suffix$extSuffix")
+                if (candidate.createNewFile()) {
+                    return candidate
+                }
+                counter++
+            }
+        }
     }
 
     private fun copyAndDelete(source: File, destination: File): File {
-        FileInputStream(source).use { input ->
-            FileOutputStream(destination).use { output ->
-                input.copyTo(output)
+        try {
+            val expectedBytes = source.length()
+            val copiedBytes = FileInputStream(source).use { input ->
+                FileOutputStream(destination).use { output ->
+                    val copied = input.copyTo(output)
+                    output.flush()
+                    copied
+                }
             }
+            if (copiedBytes != expectedBytes || destination.length() != expectedBytes) {
+                throw IOException("Incomplete copy to ${destination.absolutePath}")
+            }
+            source.delete()
+            return destination
+        } catch (e: Exception) {
+            if (destination.exists() && source.exists()) {
+                destination.delete()
+            }
+            throw e
         }
-        source.delete()
-        return destination
     }
 
     private fun copyToSafTreeUri(
@@ -321,6 +480,7 @@ object DownloadFileManager {
         source: File,
         treeUri: Uri
     ): Uri? {
+        var createdDocUri: Uri? = null
         return try {
             val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
             val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
@@ -331,23 +491,45 @@ object DownloadFileManager {
                 mimeType,
                 source.name
             ) ?: return null
+            createdDocUri = docUri
 
-            context.contentResolver.openOutputStream(docUri)?.use { output ->
+            val expectedBytes = source.length()
+            val stream = context.contentResolver.openOutputStream(docUri)
+                ?: throw IOException("Unable to open SAF output stream for $docUri")
+            val copiedBytes = stream.use { output ->
                 FileInputStream(source).use { input ->
-                    input.copyTo(output)
+                    val copied = input.copyTo(output)
+                    output.flush()
+                    copied
                 }
-            } ?: return null
+            }
+            if (copiedBytes != expectedBytes) {
+                throw IOException("Incomplete SAF copy: expected $expectedBytes, copied $copiedBytes")
+            }
 
             source.delete()
             docUri
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy file to SAF tree URI: $treeUri", e)
+            createdDocUri?.let { uri ->
+                try {
+                    if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) {
+                        context.contentResolver.delete(uri, null, null)
+                    }
+                } catch (_: Exception) {
+                    try {
+                        context.contentResolver.delete(uri, null, null)
+                    } catch (_: Exception) {}
+                }
+            }
             null
         }
     }
 
     private fun copyToMediaStoreDownloads(context: Context, source: File): Uri? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val resolver = context.contentResolver
+        var pendingUri: Uri? = null
         return try {
             val mimeType = resolveMimeType(source)
             val values = ContentValues().apply {
@@ -356,23 +538,40 @@ object DownloadFileManager {
                 put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$FOLDER_NAME")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
-            val resolver = context.contentResolver
             val itemUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: return null
+            pendingUri = itemUri
 
-            resolver.openOutputStream(itemUri)?.use { output ->
+            val expectedBytes = source.length()
+            val stream = resolver.openOutputStream(itemUri)
+                ?: throw IOException("Unable to open MediaStore output stream for $itemUri")
+            val copiedBytes = stream.use { output ->
                 FileInputStream(source).use { input ->
-                    input.copyTo(output)
+                    val copied = input.copyTo(output)
+                    output.flush()
+                    copied
                 }
-            } ?: return null
+            }
+            if (copiedBytes != expectedBytes) {
+                throw IOException("Incomplete MediaStore copy: expected $expectedBytes, copied $copiedBytes")
+            }
 
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
-            resolver.update(itemUri, values, null, null)
+            val updatedRows = resolver.update(itemUri, values, null, null)
+            if (updatedRows <= 0) {
+                throw IOException("MediaStore failed to publish item: $itemUri")
+            }
+
             source.delete()
             itemUri
         } catch (e: Exception) {
             Log.e(TAG, "Failed to export file to MediaStore.Downloads", e)
+            pendingUri?.let { uri ->
+                try {
+                    resolver.delete(uri, null, null)
+                } catch (_: Exception) {}
+            }
             null
         }
     }

@@ -94,6 +94,11 @@ class DownloadFileManagerTest {
         val conflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
         assertEquals("video_99999.mp4", conflicted.name)
 
+        // Simulate second conflict with same timestamp
+        File(targetDir, "video_99999.mp4").writeText("exists-2")
+        val doubleConflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video_99999_1.mp4", doubleConflicted.name)
+
         // Conflict without extension
         File(targetDir, "audiofile").writeText("audio")
         val conflictedNoExt = DownloadFileManager.buildUniqueTargetFile(targetDir, "audiofile", 88888L)
@@ -115,5 +120,21 @@ class DownloadFileManagerTest {
         val foundAfter = DownloadFileManager.findCompletedMediaFile(staging)
         assertNotNull(foundAfter)
         assertEquals(completeMedia.absolutePath, foundAfter?.absolutePath)
+    }
+
+    @Test
+    fun `reserveUniqueTargetFile atomically reserves unique target paths without overwriting`() {
+        val targetDir = tempFolder.newFolder("atomic_reserve")
+
+        val first = DownloadFileManager.reserveUniqueTargetFile(targetDir, "clip.mp4") { 12345L }
+        val second = DownloadFileManager.reserveUniqueTargetFile(targetDir, "clip.mp4") { 12345L }
+        val third = DownloadFileManager.reserveUniqueTargetFile(targetDir, "clip.mp4") { 12345L }
+
+        assertEquals("clip.mp4", first.name)
+        assertEquals("clip_12345.mp4", second.name)
+        assertEquals("clip_12345_1.mp4", third.name)
+        assertTrue(first.exists())
+        assertTrue(second.exists())
+        assertTrue(third.exists())
     }
 }

@@ -253,24 +253,27 @@ class DownloadForegroundService : Service() {
 
             // Download completed successfully
             val completed = DownloadFileManager.finalizeCompletedMedia(this, taskId)
-            val finalPath = completed?.outputPath ?: ""
-            val finalSize = completed?.fileSize ?: latestTotalBytes
-            val completedFile = completed?.file
-            if (completedFile != null && latestTitle == task.url) {
-                val baseName = completedFile.nameWithoutExtension
-                val cleanTitle = if (baseName.contains(" [")) baseName.substringBeforeLast(" [") else baseName
+                ?: throw java.io.IOException("Berkas unduhan selesai tidak ditemukan di direktori staging")
+            val finalPath = completed.outputPath
+            val finalSize = completed.fileSize.takeIf { it > 0L } ?: latestTotalBytes
+            val completedFile = completed.file
+            val completedTitle = completedFile?.nameWithoutExtension
+                ?: completed.displayName.takeIf { it.isNotBlank() }?.let { File(it).nameWithoutExtension }
+            if (completedTitle != null && latestTitle == task.url) {
+                val cleanTitle = if (completedTitle.contains(" [")) completedTitle.substringBeforeLast(" [") else completedTitle
                 if (cleanTitle.isNotBlank()) {
                     latestTitle = cleanTitle
                     repository.updateMetadata(taskId, cleanTitle, task.thumbnailUrl, task.formatLabel)
                 }
             }
 
-            // Memastikan MediaScannerConnection dipanggil agar video/audio langsung otomatis
-            // muncul di Galeri HP dan aplikasi Pemutar Musik/Video
+            // Pemindaian MediaScannerConnection dipanggil untuk berkas dengan path fisik lokal
+            // agar video/audio langsung otomatis muncul di Galeri HP dan aplikasi Pemutar Musik/Video.
+            // Untuk ekspor SAF dokumen non-lokal (content://), pengindeksan bergantung pada penyedia dokumen SAF terkait.
             if (completedFile != null && completedFile.exists()) {
                 DownloadFileManager.scanMediaFile(this, completedFile)
             } else if (finalPath.startsWith("/") && File(finalPath).exists()) {
-                DownloadFileManager.scanMediaFile(this, File(finalPath))
+                DownloadFileManager.scanMediaPath(this, finalPath)
             }
 
             repository.markCompleted(taskId, finalPath, finalSize)
@@ -520,11 +523,16 @@ class DownloadForegroundService : Service() {
     private fun showCompletedNotification(taskId: String, title: String, filePath: String, fileSize: Long) {
         val openAppPendingIntent = createOpenAppPendingIntent()
         val sizeFormatted = if (fileSize > 0) " • ${formatBytes(fileSize)}" else ""
+        val fallbackName = if (filePath.startsWith("content://")) {
+            filePath.substringAfterLast("%2F").substringAfterLast("/")
+        } else {
+            File(filePath).name
+        }
 
         val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(getString(R.string.download_completed))
-            .setContentText("${title.ifBlank { File(filePath).name }}$sizeFormatted")
+            .setContentText("${title.ifBlank { fallbackName }}$sizeFormatted")
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

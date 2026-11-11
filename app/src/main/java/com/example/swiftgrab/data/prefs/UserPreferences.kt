@@ -3,6 +3,7 @@ package com.example.swiftgrab.data.prefs
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.example.swiftgrab.util.StorageHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,8 +22,9 @@ data class SwiftGrabSettings(
  */
 class UserPreferences(context: Context) {
 
+    private val appContext: Context = context.applicationContext
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _settings = MutableStateFlow(readSettings())
     val settings: StateFlow<SwiftGrabSettings> = _settings.asStateFlow()
@@ -76,41 +78,59 @@ class UserPreferences(context: Context) {
         prefs.getString(KEY_CUSTOM_DOWNLOAD_URI, null)
 
     fun setCustomDownloadUri(uri: String?) {
-        prefs.edit {
-            if (uri.isNullOrBlank()) remove(KEY_CUSTOM_DOWNLOAD_URI)
-            else putString(KEY_CUSTOM_DOWNLOAD_URI, uri)
+        val previousUri = getCustomDownloadUri()
+        val cleanUri = uri?.takeIf { it.isNotBlank() }
+        val editor = prefs.edit()
+        if (cleanUri == null) editor.remove(KEY_CUSTOM_DOWNLOAD_URI)
+        else editor.putString(KEY_CUSTOM_DOWNLOAD_URI, cleanUri)
+        if (editor.commit()) {
+            _settings.update { it.copy(customDownloadUri = cleanUri) }
+            if (!previousUri.isNullOrBlank() && previousUri != cleanUri) {
+                StorageHelper.releasePersistablePermission(appContext, previousUri)
+            }
         }
-        _settings.update { it.copy(customDownloadUri = uri?.takeIf { u -> u.isNotBlank() }) }
     }
 
     fun setCustomDownloadLocation(path: String?, uri: String?) {
+        val previousUri = getCustomDownloadUri()
         val cleanPath = path?.takeIf { it.isNotBlank() }
         val cleanUri = uri?.takeIf { it.isNotBlank() }
-        prefs.edit {
-            if (cleanPath == null) remove(KEY_CUSTOM_DOWNLOAD_PATH)
-            else putString(KEY_CUSTOM_DOWNLOAD_PATH, cleanPath)
+        val editor = prefs.edit()
+        if (cleanPath == null) editor.remove(KEY_CUSTOM_DOWNLOAD_PATH)
+        else editor.putString(KEY_CUSTOM_DOWNLOAD_PATH, cleanPath)
 
-            if (cleanUri == null) remove(KEY_CUSTOM_DOWNLOAD_URI)
-            else putString(KEY_CUSTOM_DOWNLOAD_URI, cleanUri)
-        }
-        _settings.update {
-            it.copy(
-                customDownloadPath = cleanPath,
-                customDownloadUri = cleanUri
-            )
+        if (cleanUri == null) editor.remove(KEY_CUSTOM_DOWNLOAD_URI)
+        else editor.putString(KEY_CUSTOM_DOWNLOAD_URI, cleanUri)
+
+        if (editor.commit()) {
+            _settings.update {
+                it.copy(
+                    customDownloadPath = cleanPath,
+                    customDownloadUri = cleanUri
+                )
+            }
+            if (!previousUri.isNullOrBlank() && previousUri != cleanUri) {
+                StorageHelper.releasePersistablePermission(appContext, previousUri)
+            }
         }
     }
 
     fun clearCustomDownloadDir() {
-        prefs.edit {
-            remove(KEY_CUSTOM_DOWNLOAD_PATH)
-            remove(KEY_CUSTOM_DOWNLOAD_URI)
-        }
-        _settings.update {
-            it.copy(
-                customDownloadPath = null,
-                customDownloadUri = null
-            )
+        val previousUri = getCustomDownloadUri()
+        val cleared = prefs.edit()
+            .remove(KEY_CUSTOM_DOWNLOAD_PATH)
+            .remove(KEY_CUSTOM_DOWNLOAD_URI)
+            .commit()
+        if (cleared) {
+            _settings.update {
+                it.copy(
+                    customDownloadPath = null,
+                    customDownloadUri = null
+                )
+            }
+            if (!previousUri.isNullOrBlank()) {
+                StorageHelper.releasePersistablePermission(appContext, previousUri)
+            }
         }
     }
 

@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.swiftgrab.BuildConfig
 import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
@@ -78,6 +79,7 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.ui.components.ClipboardSuggestionBanner
 import com.example.swiftgrab.ui.components.DownloadTaskCard
 import com.example.swiftgrab.ui.components.SettingsBottomSheet
+import com.example.swiftgrab.ui.components.UpdateAvailableDialog
 import com.example.swiftgrab.ui.components.XLoginDialog
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import com.example.swiftgrab.util.UrlValidator
@@ -123,10 +125,17 @@ fun MainRoute(
             ytDlpVersion = viewModel.getYtDlpVersion(),
             updateState = uiState.ytdlUpdateStatus,
             isXLoggedIn = uiState.isXLoggedIn,
+            appUpdateState = uiState.appUpdateState,
+            currentAppVersion = BuildConfig.VERSION_NAME,
             onToggleInstantShare = viewModel::setInstantShareMode,
             onSelectDefaultPreset = viewModel::setDefaultPreset,
             onToggleAutoStartClipboard = viewModel::setAutoStartClipboard,
             onCheckYtDlpUpdate = viewModel::updateYoutubeDL,
+            onCheckAppUpdate = { viewModel.checkForAppUpdate(manual = true) },
+            onShowUpdateDialog = {
+                isSettingsOpen = false
+                viewModel.showUpdateDialogOrCheck()
+            },
             onOpenXLogin = { isXLoginDialogOpen = true },
             onLogoutX = {
                 viewModel.logoutXAccount()
@@ -164,6 +173,20 @@ fun MainRoute(
                 viewModel.resetUpdateStatus()
                 isSettingsOpen = false
             }
+        )
+    }
+
+    val availableUpdate = (uiState.appUpdateState as? AppUpdateState.UpdateAvailable)?.info
+    if (uiState.isUpdateDialogVisible && availableUpdate != null) {
+        UpdateAvailableDialog(
+            updateInfo = availableUpdate,
+            currentVersion = BuildConfig.VERSION_NAME,
+            downloadState = uiState.apkDownloadState,
+            onDownloadAndInstall = { viewModel.startAppUpdateDownload(availableUpdate) },
+            onInstallNow = viewModel::installDownloadedApk,
+            onOpenInstallPermissionSettings = viewModel::openInstallPermissionSettings,
+            onOpenGitHub = { viewModel.openReleaseOnGitHub(availableUpdate.htmlUrl) },
+            onDismiss = viewModel::dismissUpdateDialog
         )
     }
 

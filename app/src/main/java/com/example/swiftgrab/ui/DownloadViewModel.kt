@@ -14,16 +14,20 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
 import com.example.swiftgrab.service.DownloadForegroundService
+import com.example.swiftgrab.update.ApkDownloadState
+import com.example.swiftgrab.update.AppUpdateCheckResult
+import com.example.swiftgrab.update.AppUpdateInfo
+import com.example.swiftgrab.update.AppUpdateManager
 import com.example.swiftgrab.util.StorageHelper
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class TaskFilter(val title: String) {
@@ -40,6 +44,14 @@ sealed interface YtDlpUpdateState {
     data class Error(val message: String) : YtDlpUpdateState
 }
 
+sealed interface AppUpdateState {
+    data object Idle : AppUpdateState
+    data object Checking : AppUpdateState
+    data class UpdateAvailable(val info: AppUpdateInfo) : AppUpdateState
+    data class UpToDate(val version: String) : AppUpdateState
+    data class Error(val message: String) : AppUpdateState
+}
+
 data class DownloadUiState(
     val tasks: List<DownloadTaskEntity> = emptyList(),
     val filteredTasks: List<DownloadTaskEntity> = emptyList(),
@@ -48,7 +60,10 @@ data class DownloadUiState(
     val isEngineReady: Boolean = false,
     val ytdlUpdateStatus: YtDlpUpdateState = YtDlpUpdateState.Idle,
     val settings: SwiftGrabSettings = SwiftGrabSettings(),
-    val isXLoggedIn: Boolean = false
+    val isXLoggedIn: Boolean = false,
+    val appUpdateState: AppUpdateState = AppUpdateState.Idle,
+    val apkDownloadState: ApkDownloadState = ApkDownloadState.Idle,
+    val isUpdateDialogVisible: Boolean = false
 )
 
 class DownloadViewModel(
@@ -63,6 +78,12 @@ class DownloadViewModel(
     private val _clipboardSuggestionUrl = MutableStateFlow<String?>(null)
     private val _ytdlUpdateStatus = MutableStateFlow<YtDlpUpdateState>(YtDlpUpdateState.Idle)
     private val _isXLoggedIn = MutableStateFlow(CookieStorageManager.hasValidXCookies(application))
+    private val _appUpdateState = MutableStateFlow<AppUpdateState>(AppUpdateState.Idle)
+    private val _apkDownloadState = MutableStateFlow<ApkDownloadState>(ApkDownloadState.Idle)
+    private val _isUpdateDialogVisible = MutableStateFlow(false)
+
+    private var hasAutoCheckedAppUpdate = false
+    private var apkDownloadObserverJob: Job? = null
 
     private val tasksAndFilter = combine(repository.allTasks, _activeFilter) { tasks, filter ->
         val filtered = when (filter) {
@@ -87,11 +108,20 @@ class DownloadViewModel(
         Pair(isReady, Triple(updateStatus, settings, isXLoggedIn))
     }
 
-    val uiState: StateFlow<DownloadUiState> = combine(stateGroup1, stateGroup2) { g1, g2 ->
+    private val stateGroup3 = combine(
+        _appUpdateState,
+        _apkDownloadState,
+        _isUpdateDialogVisible
+    ) { appUpdateState, apkDownloadState, isUpdateDialogVisible ->
+        Triple(appUpdateState, apkDownloadState, isUpdateDialogVisible)
+    }
+
+    val uiState: StateFlow<DownloadUiState> = combine(stateGroup1, stateGroup2, stateGroup3) { g1, g2, g3 ->
         val (tasks, filterAndFiltered, clipboardUrl) = g1
         val (filter, filtered) = filterAndFiltered
         val (isReady, updateSettingsX) = g2
         val (updateStatus, settings, isXLoggedIn) = updateSettingsX
+        val (appUpdateState, apkDownloadState, isUpdateDialogVisible) = g3
 
         DownloadUiState(
             tasks = tasks,
@@ -101,7 +131,10 @@ class DownloadViewModel(
             isEngineReady = isReady,
             ytdlUpdateStatus = updateStatus,
             settings = settings,
-            isXLoggedIn = isXLoggedIn
+            isXLoggedIn = isXLoggedIn,
+            appUpdateState = appUpdateState,
+            apkDownloadState = apkDownloadState,
+            isUpdateDialogVisible = isUpdateDialogVisible
         )
     }.stateIn(
         scope = viewModelScope,
@@ -209,16 +242,18 @@ class DownloadViewModel(
 
     /**
      * Mengatur folder unduhan kustom dari URI Storage Access Framework yang dipilih pengguna.
-     * Mengembalikan path fisik atau label tampilan folder jika berhasil disimpan.
+     * Mengembalikan path fisik atau label tampilan folder jika izin berhasil dipertahankan dan disimpan.
      */
     fun setStorageDirFromUri(uri: Uri): String? {
         val context: Context = getApplication()
-        val path = StorageHelper.resolvePathAndPersist(context, uri)
+        if (!StorageHelper.takePersistablePermission(context, uri)) {
+            return null
+        }
+        val path = StorageHelper.resolvePathFromTreeUri(context, uri)
         if (path != null) {
             preferences.setCustomDownloadLocation(path, uri.toString())
             return path
         }
-        StorageHelper.takePersistablePermission(context, uri)
         val displayLabel = StorageHelper.getDisplayLabelFromTreeUri(uri)
         preferences.setCustomDownloadLocation(null, uri.toString())
         return displayLabel
@@ -262,6 +297,142 @@ class DownloadViewModel(
 
     fun resetUpdateStatus() {
         _ytdlUpdateStatus.value = YtDlpUpdateState.Idle
+        if (_appUpdateState.value is AppUpdateState.UpToDate || _appUpdateState.value is AppUpdateState.Error) {
+            _appUpdateState.value = AppUpdateState.Idle
+        }
+    }
+
+    /**
+     * Memeriksa pembaruan aplikasi SwiftGrab melalui GitHub Releases API.
+     * Jika [manual] bernilai false, pengecekan otomatis hanya berjalan sekali per sesi aplikasi.
+     */
+    fun checkForAppUpdate(manual: Boolean = false) {
+        if (!manual && hasAutoCheckedAppUpdate) return
+        if (_appUpdateState.value is AppUpdateState.Checking) return
+
+        hasAutoCheckedAppUpdate = true
+        _appUpdateState.value = AppUpdateState.Checking
+
+        viewModelScope.launch {
+            when (val result = AppUpdateManager.checkForUpdate()) {
+                is AppUpdateCheckResult.UpdateAvailable -> {
+                    _appUpdateState.value = AppUpdateState.UpdateAvailable(result.info)
+                    _isUpdateDialogVisible.value = true
+                    if (!manual) {
+                        AppUpdateManager.showUpdateNotification(getApplication(), result.info)
+                    }
+                }
+                is AppUpdateCheckResult.UpToDate -> {
+                    _appUpdateState.value = if (manual) {
+                        AppUpdateState.UpToDate(result.currentVersion)
+                    } else {
+                        AppUpdateState.Idle
+                    }
+                }
+                is AppUpdateCheckResult.Error -> {
+                    _appUpdateState.value = if (manual) {
+                        AppUpdateState.Error(result.message)
+                    } else {
+                        AppUpdateState.Idle
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Menampilkan modal pembaruan aplikasi jika informasi rilis terbaru sudah tersedia,
+     * atau memulai pemeriksaan ulang secara manual jika belum tersedia.
+     */
+    fun showUpdateDialogOrCheck() {
+        if (_appUpdateState.value is AppUpdateState.UpdateAvailable) {
+            _isUpdateDialogVisible.value = true
+        } else {
+            checkForAppUpdate(manual = true)
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _isUpdateDialogVisible.value = false
+    }
+
+    /**
+     * Memulai unduhan APK pembaruan via [android.app.DownloadManager] dan meluncurkan
+     * pemasang sistem segera setelah selesai apabila izin pemasangan paket tersedia.
+     */
+    fun startAppUpdateDownload(updateInfo: AppUpdateInfo) {
+        if (_apkDownloadState.value is ApkDownloadState.Downloading) return
+
+        val context: Context = getApplication()
+        val enqueueResult = AppUpdateManager.enqueueApkDownload(context, updateInfo)
+        enqueueResult.onFailure { error ->
+            _apkDownloadState.value = ApkDownloadState.Failed(
+                error.message ?: "Gagal memulai pengunduhan APK."
+            )
+            return
+        }
+
+        val downloadId = enqueueResult.getOrNull() ?: return
+        apkDownloadObserverJob?.cancel()
+        apkDownloadObserverJob = viewModelScope.launch {
+            AppUpdateManager.observeApkDownload(context, downloadId).collect { state ->
+                _apkDownloadState.value = state
+                if (state is ApkDownloadState.ReadyToInstall) {
+                    AppUpdateManager.launchApkInstaller(context, state.apkUri)
+                }
+            }
+        }
+    }
+
+    /**
+     * Meluncurkan pemasang APK hasil unduhan, atau membuka pengaturan izin sumber tidak dikenal
+     * jika sistem Android belum mengizinkan instalasi paket dari SwiftGrab.
+     */
+    fun installDownloadedApk() {
+        val context: Context = getApplication()
+        when (val state = _apkDownloadState.value) {
+            is ApkDownloadState.ReadyToInstall -> {
+                AppUpdateManager.launchApkInstaller(context, state.apkUri)
+            }
+            is ApkDownloadState.PermissionRequired -> {
+                if (AppUpdateManager.canInstallPackages(context)) {
+                    _apkDownloadState.value = ApkDownloadState.ReadyToInstall(
+                        downloadId = state.downloadId,
+                        apkUri = state.apkUri,
+                        localFilePath = state.localFilePath
+                    )
+                    AppUpdateManager.launchApkInstaller(context, state.apkUri)
+                } else {
+                    AppUpdateManager.launchUnknownSourcesSettings(context)
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    fun openInstallPermissionSettings() {
+        AppUpdateManager.launchUnknownSourcesSettings(getApplication())
+    }
+
+    fun openReleaseOnGitHub(url: String) {
+        AppUpdateManager.openReleasePage(getApplication(), url)
+    }
+
+    /**
+     * Dipanggil saat [MainActivity] kembali aktif untuk otomatis melanjutkan instalasi APK
+     * apabila pengguna baru saja menyalakan izin "Install aplikasi tidak dikenal".
+     */
+    fun recheckInstallPermissionOnResume() {
+        val state = _apkDownloadState.value as? ApkDownloadState.PermissionRequired ?: return
+        val context: Context = getApplication()
+        if (AppUpdateManager.canInstallPackages(context)) {
+            _apkDownloadState.value = ApkDownloadState.ReadyToInstall(
+                downloadId = state.downloadId,
+                apkUri = state.apkUri,
+                localFilePath = state.localFilePath
+            )
+            AppUpdateManager.launchApkInstaller(context, state.apkUri)
+        }
     }
 
     fun refreshXLoginState() {
