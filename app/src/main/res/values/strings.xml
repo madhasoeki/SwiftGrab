@@ -1,0 +1,87 @@
+<resources>
+    <string name="app_name">SwiftGrab</string>
+    <string name="download_channel_name">Download Progress</string>
+    <string name="download_channel_description">Shows active download progress, speed, and status</string>
+    <string name="notification_channel_completed_name">Download Completed</string>
+    <string name="notification_channel_completed_description">Notifies when downloads finish or fail</string>
+    <string name="action_pause">Jeda</string>
+    <string name="action_resume">Lanjutkan</string>
+    <string name="action_cancel">Batal</string>
+    <string name="download_preparing">Menyiapkan unduhan…</string>
+    <string name="download_paused">Unduhan dijeda</string>
+    <string name="download_completed">Unduhan selesai</string>
+    <string name="download_failed">Unduhan gagal</string>
+
+    <!-- Zero-Paste & Quick Settings Tile -->
+    <string name="tile_quick_download">Unduh dari Klip</string>
+    <string name="tile_quick_download_desc">Unduh video langsung dari papan klip</string>
+    <string name="toast_download_started">SwiftGrab: Mengunduh di latar belakang (%s)</string>
+    <string name="toast_invalid_url">SwiftGrab: Tidak ditemukan tautan video yang valid</string>
+    <string name="toast_clipboard_empty">SwiftGrab: Papan klip tidak berisi tautan yang valid</string>
+    <string name="format_sheet_title">Pilihan Format Unduhan</string>
+    <string name="btn_start_download">Mulai Unduh</string>
+    <string name="btn_cancel">Batal</string>
+
+    <!-- UI MainScreen & Components -->
+    <string name="engine_ready">yt-dlp siap</string>
+    <string name="engine_initializing">Menyiapkan mesin…</string>
+    <string name="filter_all">Semua</string>
+    <string name="filter_active">Aktif</string>
+    <string name="filter_completed">Selesai</string>
+    <string name="filter_failed">Gagal</string>
+    <string name="empty_title">Belum Ada Unduhan</string>
+    <string name="empty_desc">Bagikan tautan dari aplikasi mana saja ke SwiftGrab, atau salin tautan lalu buka aplikasi ini untuk mengunduh otomatis.</string>
+    <string name="btn_manual_link">+ Tautan Manual</string>
+    <string name="manual_dialog_title">Tambah Unduhan Manual</string>
+    <string name="manual_dialog_hint">Tempel tautan video atau audio (http/https)</string>
+    <string name="manual_dialog_error">Tautan tidak valid atau kosong</string>
+    <string name="clipboard_banner_title">Tautan terdeteksi di papan klip</string>
+    <string name="btn_download_video">Unduh Video</string>
+    <string name="btn_download_audio">Unduh Audio</string>
+    <string name="settings_title">Pengaturan SwiftGrab</string>
+    <string name="settings_share_mode">Mode Berbagi (Share Sheet)</string>
+    <string name="settings_one_tap">Mode Instan / 1-Ketukan (Default)</string>
+    <string name="settings_one_tap_desc">Unduh langsung di latar belakang tanpa membuka aplikasi</string>
+    <string name="settings_format_sheet">Mode Lembar Format Cepat</string>
+    <string name="settings_format_sheet_desc">Pilih preset format video/audio setiap kali membagikan tautan</string>
+    <string name="settings_default_preset">Preset Format Bawaan</string>
+    <string name="settings_auto_clipboard">Deteksi Papan Klip Otomatis</string>
+    <string name="settings_auto_clipboard_desc">Otomatis mulai unduhan saat membuka aplikasi jika ada tautan baru di papan klip</string>
+    <string name="settings_storage_dir">Folder Penyimpanan</string>
+    <string name="settings_ytdlp_update">Pembaruan Ekstraktor (yt-dlp)</string>
+    <string name="settings_ytdlp_version">Versi yt-dlp: %s</string>
+    <string name="btn_check_ytdlp_update">Periksa Pembaruan yt-dlp</string>
+    <string name="ytdlp_updating">Memeriksa dan memperbarui yt-dlp…</string>
+    <string name="ytdlp_update_success">Pembaruan berhasil! Versi terbaru: %s</string>
+    <string name="ytdlp_update_error">Gagal memperbarui: %s</string>
+    <string name="error_dialog_title">Detail Kesalahan Unduhan</string>
+    <string name="btn_copy">Salin</string>
+    <string name="btn_close">Tutup</string>
+    <string name="btn_clear_completed">Bersihkan Riwayat Selesai</string>
+    <string name="cd_pause">Jeda unduhan</string>
+    <string name="cd_resume">Lanjutkan unduhan</string>
+    <string name="cd_cancel">Batalkan unduhan</string>
+    <string name="cd_delete">Hapus tugas</string>
+    <string name="cd_play">Buka berkas</string>
+    <string name="cd_share">Bagikan berkas</string>
+    <string name="cd_retry">Coba lagi unduhan</string>
+    <string name="cd_error_info">Lihat alasan kegagalan</string>
+    <string name="cd_settings">Pengaturan</string>
+    <string name="cd_dismiss">Tutup banner</string>
+
+    <!-- X / Twitter Login & Cookies -->
+    <string name="x_login_title">Masuk ke Akun X</string>
+    <string name="x_login_subtitle">Halaman resmi x.com (Sandi aman)</string>
+    <string name="x_login_save_btn">Simpan &amp; Selesai</string>
+    <string name="x_login_success">Cookies akun X berhasil disimpan!</string>
+    <string name="x_login_auth_detected">Sesi login terdeteksi! Tekan \'Simpan &amp; Selesai\'</string>
+    <string name="x_login_hint">Silakan login di halaman resmi X di bawah. SwiftGrab hanya menyimpan session cookies agar bisa mengunduh video 18+ / sensitif.</string>
+    <string name="x_account_section_title">Akun X (Twitter)</string>
+    <string name="x_account_status_logged_in">Cookies Aktif</string>
+    <string name="x_account_status_not_logged_in">Belum Masuk</string>
+    <string name="x_account_desc_logged_in">Cookies tersimpan di penyimpanan privat. Video sensitif &amp; dibatasi usia di X dapat diunduh.</string>
+    <string name="x_account_desc_not_logged_in">Masuk ke akun X untuk mengunduh video yang dibatasi usia atau berlabel konten sensitif.</string>
+    <string name="btn_x_login">Masuk ke Akun X</string>
+    <string name="btn_x_logout">Hapus Cookies / Keluar</string>
+    <string name="toast_x_logout_success">Cookies akun X telah dihapus</string>
+</resources>

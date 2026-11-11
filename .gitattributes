@@ -1,0 +1,9 @@
+* text=auto
+
+# Keep shell scripts and Gradle wrapper Unix LF
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Keep Windows batch scripts CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

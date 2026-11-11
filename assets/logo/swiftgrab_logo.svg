@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Outer Squircle Bezel Gradient -->
+    <linearGradient id="bezelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#273552"/>
+      <stop offset="50%" stop-color="#151D2E"/>
+      <stop offset="100%" stop-color="#0B0F19"/>
+    </linearGradient>
+
+    <!-- Inner Deep Cobalt Squircle Surface -->
+    <linearGradient id="surfaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141E33"/>
+      <stop offset="55%" stop-color="#0C1220"/>
+      <stop offset="100%" stop-color="#070A12"/>
+    </linearGradient>
+
+    <!-- Ambient Center Glow -->
+    <radialGradient id="ambientGlow" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.24"/>
+      <stop offset="55%" stop-color="#38BDF8" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#0C1220" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Main Sky Blue to Emerald Gradient -->
+    <linearGradient id="emblemGrad" x1="15%" y1="30%" x2="85%" y2="70%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="48%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+
+    <!-- Soft Neon Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="18" flood-color="#2DD4BF" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Squircle Bezel -->
+  <rect x="8" y="8" width="1008" height="1008" rx="225" ry="225" fill="url(#bezelGrad)" stroke="#334155" stroke-width="4"/>
+
+  <!-- Inner Squircle Surface -->
+  <rect x="62" y="62" width="900" height="900" rx="185" ry="185" fill="url(#surfaceGrad)" stroke="#1E293B" stroke-width="5"/>
+
+  <!-- Ambient Neon Glow -->
+  <circle cx="512" cy="512" r="380" fill="url(#ambientGlow)"/>
+
+  <!-- SwiftGrab Emblem (Download Arrow + Lightning Bolt + Play Triangle) -->
+  <path d="M 832.0 510.5 L 606.5 372.4 L 599.3 405.8 L 770.9 510.5 L 587.6 624.0 L 544.0 688.0 Z M 610.9 222.5 L 378.2 554.2 L 480.0 555.6 L 482.9 558.5 L 420.4 814.5 L 661.8 469.8 L 558.5 468.4 L 555.6 465.5 Z M 544.0 375.3 L 519.3 497.5 L 599.3 498.9 L 600.7 503.3 L 526.5 609.5 L 512.0 622.5 L 506.2 638.5 L 500.4 641.5 L 496.0 629.8 L 520.7 526.5 L 440.7 525.1 L 439.3 522.2 Z M 330.2 205.1 L 330.2 573.1 L 327.3 576.0 L 202.2 577.5 L 401.5 773.8 L 410.2 737.5 L 311.3 640.0 L 309.8 634.2 L 283.6 612.4 L 285.1 608.0 L 362.2 606.5 L 362.2 277.8 L 372.4 266.2 L 493.1 338.9 L 497.5 338.9 L 513.5 314.2 L 354.9 216.7 Z" fill="url(#emblemGrad)" fill-rule="evenodd" filter="url(#neonGlow)"/>
+</svg>

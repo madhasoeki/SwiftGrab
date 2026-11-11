@@ -1,0 +1,137 @@
+{
+  "version": 2,
+  "skills": {
+    "android-cli": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "devtools/android-cli/SKILL.md",
+      "computedHash": "83e2185e315636bfd2fa89d7f77639c8604c4d1da7ad4f7cd5876da282d11527"
+    },
+    "android-compose-clean-mvi-architecture": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/android-compose-clean-mvi-architecture/SKILL.md",
+      "computedHash": "d4ddf09a2f2200765fb6d603774c897200408abc9ef8b15b6aa9943771727950"
+    },
+    "android-compose-ui": {
+      "source": "humanshell/android-skills",
+      "sourceType": "github",
+      "skillPath": "android-compose-ui/SKILL.md",
+      "computedHash": "e8abd90eddd78e806fbecc0ce77e527bb29327d6a5c8f52154d4b1911b851f72"
+    },
+    "android-intent-security": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "security/android-intent-security/SKILL.md",
+      "computedHash": "c57a5de1bb7c24dd650ff9035d6b85fc01d29acd3543edc4b4fe4655c2e52b0b"
+    },
+    "compose-focus-navigation": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-focus-navigation/SKILL.md",
+      "computedHash": "c8cf8af8f9f47ba11db7ad9662222bd1a59c708850312d1f1782c02e88b99d85"
+    },
+    "compose-modifier-and-layout-style": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-modifier-and-layout-style/SKILL.md",
+      "computedHash": "922a34b958e5c662f0c5796bc4ef1519055b9872f0a7da6742238d305930efdd"
+    },
+    "compose-recomposition-performance": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-recomposition-performance/SKILL.md",
+      "computedHash": "e430918e92051cd99ba9e29dbc89f396a75af58e0f56bc660c33647eb6adcfe3"
+    },
+    "compose-side-effects": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-side-effects/SKILL.md",
+      "computedHash": "782c62326e191b2d9353443ef1ce6a1c5b1f2fe6df5be983190dd91527823d44"
+    },
+    "compose-slot-api-pattern": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-slot-api-pattern/SKILL.md",
+      "computedHash": "ae114558114f8245e8c248809858774046c1e723ae27bb902b8c0da480476c98"
+    },
+    "compose-stability-diagnostics": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-stability-diagnostics/SKILL.md",
+      "computedHash": "2e17f751cabde2f607ed82a5a6e0ac32bab1b3bbe35573e2bde1ac0a8705f607"
+    },
+    "compose-state-authoring": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-state-authoring/SKILL.md",
+      "computedHash": "509bff3b31dee58cd195f185a7177e78de0aa635801cc11c4b4afdcfbf24d93a"
+    },
+    "compose-state-deferred-reads": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-state-deferred-reads/SKILL.md",
+      "computedHash": "bb4346e0a1c074cc9636dcebf37412687b668389f3891868bd150409d9e27d53"
+    },
+    "compose-state-holder-ui-split": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-state-holder-ui-split/SKILL.md",
+      "computedHash": "5db72ec033d493a8523abc907e3e74eb8d4ea5a5be5e1d865a8ad2ee5e8908f3"
+    },
+    "compose-ui-testing-patterns": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-ui-testing-patterns/SKILL.md",
+      "computedHash": "65158faa15fae202d35572a1649ff8caab6365d0cd35e5fdb8094b8cf909d034"
+    },
+    "edge-to-edge": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "system/edge-to-edge/SKILL.md",
+      "computedHash": "954c391ab845f97ce160c04c3944d6c6da3c7ad0385970353b314ee2a3aabea2"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "83485963700bcf11d5bf78118facb301676b69d918fee2e45a95e7f1a2840f6c"
+    },
+    "jetpack-compose-performance": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "jetpack-compose/jetpack-compose-performance/SKILL.md",
+      "computedHash": "80b61358eca751c520492fca7d9571522ba3ed5af9258baa146cca9fd8fcedce"
+    },
+    "kotlin-coroutines-structured-concurrency": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kotlin-coroutines-structured-concurrency/SKILL.md",
+      "computedHash": "fe07948a58c462fa69f1372375fbe32293bce583e698cfc80ff5fc9fbddc1fad"
+    },
+    "kotlin-flow-state-event-modeling": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kotlin-flow-state-event-modeling/SKILL.md",
+      "computedHash": "426cfe388de2a9bd81bf0d5132dc2c354543008a2ead589da0fd52c10d4a85a8"
+    },
+    "kotlin-multiplatform-expect-actual": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kotlin-multiplatform-expect-actual/SKILL.md",
+      "computedHash": "28d304ab3f25ff8172e1ead4588f257b14e9f7bbc8ba83ca89c1f4d3d17471ae"
+    },
+    "kotlin-types-value-class": {
+      "source": "kongxiaoan/android-skills",
+      "sourceType": "github",
+      "skillPath": "skills/kotlin-types-value-class/SKILL.md",
+      "computedHash": "fee35e71ca64c707d605fc99864dc5f0533bfeb5ef67672d663e4f27cb3c24f6"
+    },
+    "r8-analyzer": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "performance/r8-analyzer/SKILL.md",
+      "computedHash": "7139e6cfb74aca9174eedf11d04b203b6cb908031a3171485ce4ddceb2b73f95"
+    }
+  }
+}
