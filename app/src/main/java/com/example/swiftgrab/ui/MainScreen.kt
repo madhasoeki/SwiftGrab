@@ -197,14 +197,17 @@ fun MainScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = stringResource(R.string.app_name),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         EngineStatusBadge(isReady = uiState.isEngineReady)
                     }
                 },
@@ -338,43 +341,14 @@ private fun EngineStatusBadge(
     isReady: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        shape = CircleShape,
-        color = if (isReady) {
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-        } else {
-            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
-        },
+    Box(
         modifier = modifier
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
-                    )
+            .size(8.dp)
+            .clip(CircleShape)
+            .background(
+                if (isReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (isReady) {
-                    stringResource(R.string.engine_ready)
-                } else {
-                    stringResource(R.string.engine_initializing)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isReady) {
-                    MaterialTheme.colorScheme.secondary
-                } else {
-                    MaterialTheme.colorScheme.tertiary
-                }
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -472,15 +446,6 @@ private fun EmptyStateView(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.empty_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
@@ -489,7 +454,8 @@ private fun EmptyStateView(
 private fun AddManualUrlDialog(
     defaultPreset: DownloadPreset,
     onDismiss: () -> Unit,
-    onStartDownload: (String, DownloadPreset) -> Unit
+    onStartDownload: (String, DownloadPreset) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var urlText by rememberSaveable { mutableStateOf("") }
     var selectedPreset by rememberSaveable { mutableStateOf(defaultPreset) }
@@ -498,6 +464,7 @@ private fun AddManualUrlDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -556,14 +523,6 @@ private fun AddManualUrlDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = "Pilih Kualitas:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
@@ -621,13 +580,15 @@ private fun AddManualUrlDialog(
 @Composable
 private fun TaskErrorDialog(
     task: DownloadTaskEntity,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val fullError = task.errorMessage ?: "Tidak ada log kesalahan yang tercatat."
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Text(
                 text = stringResource(R.string.error_dialog_title),

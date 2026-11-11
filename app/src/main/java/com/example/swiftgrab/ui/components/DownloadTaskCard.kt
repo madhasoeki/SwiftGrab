@@ -292,11 +292,13 @@ private fun ActionButtons(
     onOpenFile: () -> Unit,
     onShareFile: () -> Unit,
     onRetry: () -> Unit,
-    onShowError: () -> Unit
+    onShowError: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
+        horizontalArrangement = Arrangement.End,
+        modifier = modifier
     ) {
         when (task.status) {
             DownloadStatus.DOWNLOADING -> {
