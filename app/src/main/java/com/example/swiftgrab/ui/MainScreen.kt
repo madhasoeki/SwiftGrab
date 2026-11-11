@@ -136,6 +136,30 @@ fun MainRoute(
                     Toast.LENGTH_SHORT
                 ).show()
             },
+            onSelectStorageDirUri = { uri ->
+                val display = viewModel.setStorageDirFromUri(uri)
+                if (display != null) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_updated, display),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onResetStorageDir = {
+                viewModel.resetStorageDir()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_storage_dir_reset),
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
             onDismiss = {
                 viewModel.resetUpdateStatus()
                 isSettingsOpen = false

@@ -2,6 +2,7 @@ package com.example.swiftgrab.ui
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,7 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
 import com.example.swiftgrab.service.DownloadForegroundService
+import com.example.swiftgrab.util.StorageHelper
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -203,6 +205,30 @@ class DownloadViewModel(
 
     fun setAutoStartClipboard(enabled: Boolean) {
         preferences.setAutoStartClipboard(enabled)
+    }
+
+    /**
+     * Mengatur folder unduhan kustom dari URI Storage Access Framework yang dipilih pengguna.
+     * Mengembalikan path fisik atau label tampilan folder jika berhasil disimpan.
+     */
+    fun setStorageDirFromUri(uri: Uri): String? {
+        val context: Context = getApplication()
+        val path = StorageHelper.resolvePathAndPersist(context, uri)
+        if (path != null) {
+            preferences.setCustomDownloadLocation(path, uri.toString())
+            return path
+        }
+        StorageHelper.takePersistablePermission(context, uri)
+        val displayLabel = StorageHelper.getDisplayLabelFromTreeUri(uri)
+        preferences.setCustomDownloadLocation(null, uri.toString())
+        return displayLabel
+    }
+
+    /**
+     * Mengembalikan folder penyimpanan unduhan ke folder publik default.
+     */
+    fun resetStorageDir() {
+        preferences.clearCustomDownloadDir()
     }
 
     /**
