@@ -55,10 +55,13 @@ jobs:
           echo "Resolved release tag: ${TAG}"
 
       - name: Decode Keystore (if configured)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${{ runner.temp }}/release.jks"
-          echo "KEYSTORE_PATH=${{ runner.temp }}/release.jks" >> "$GITHUB_ENV"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/release.jks"
+            echo "KEYSTORE_PATH=${{ runner.temp }}/release.jks" >> "$GITHUB_ENV"
+          fi
 
       - name: Build Release APK
         env:
