@@ -64,6 +64,10 @@ import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.service.DownloadFileManager
 import com.example.swiftgrab.ui.YtDlpUpdateState
 
+/**
+ * Lembar pengaturan aplikasi untuk mengonfigurasi preferensi unduhan, format default,
+ * clipboard auto-start, pembaruan yt-dlp, dan autentikasi akun X.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsBottomSheet(
@@ -161,12 +165,23 @@ fun SettingsBottomSheet(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.settings_one_tap),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_one_tap),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (settings.instantShareMode) {
+                                stringResource(R.string.settings_one_tap_desc)
+                            } else {
+                                stringResource(R.string.settings_format_sheet_desc)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
                         checked = settings.instantShareMode,
@@ -223,12 +238,19 @@ fun SettingsBottomSheet(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.settings_auto_clipboard),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_auto_clipboard),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.settings_auto_clipboard_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
                         checked = settings.autoStartClipboard,
@@ -565,6 +587,9 @@ private fun SectionHeader(
     }
 }
 
+/**
+ * Kartu pilihan preset format bawaan di dalam lembar pengaturan.
+ */
 @Composable
 private fun PresetSelectCard(
     preset: DownloadPreset,

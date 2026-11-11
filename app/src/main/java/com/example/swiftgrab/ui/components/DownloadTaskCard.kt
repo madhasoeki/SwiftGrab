@@ -282,6 +282,10 @@ private fun MetricsText(
     )
 }
 
+/**
+ * Tombol aksi kontekstual (jeda, lanjutkan, batal, hapus, putar, bagikan, ulangi)
+ * sesuai status tugas unduhan.
+ */
 @Composable
 private fun ActionButtons(
     task: DownloadTaskEntity,

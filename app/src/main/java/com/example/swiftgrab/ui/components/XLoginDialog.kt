@@ -59,6 +59,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.swiftgrab.R
 import com.example.swiftgrab.data.cookies.CookieStorageManager
 
+/**
+ * Dialog layar penuh berisi WebView resmi X (x.com) untuk mengambil dan menyimpan
+ * session cookies secara lokal demi mendukung unduhan media sensitif.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable

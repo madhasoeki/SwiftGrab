@@ -185,6 +185,9 @@ fun QuickFormatSheet(
     }
 }
 
+/**
+ * Kartu baris pilihan preset format unduhan pada QuickFormatSheet.
+ */
 @Composable
 private fun PresetOptionCard(
     preset: DownloadPreset,

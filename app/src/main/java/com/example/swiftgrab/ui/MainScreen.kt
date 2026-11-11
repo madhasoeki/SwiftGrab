@@ -63,6 +63,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -170,6 +172,10 @@ fun MainRoute(
     }
 }
 
+/**
+ * Layar utama aplikasi yang menampilkan daftar unduhan, filter status, saran clipboard,
+ * dan aksi cepat untuk menambah tautan atau membuka pengaturan.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -197,17 +203,14 @@ fun MainScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = stringResource(R.string.app_name),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         EngineStatusBadge(isReady = uiState.isEngineReady)
                     }
                 },
@@ -336,19 +339,55 @@ fun MainScreen(
     }
 }
 
+/**
+ * Lencana indikator kesiapan mesin yt-dlp dan aria2c pada app bar.
+ */
 @Composable
 private fun EngineStatusBadge(
     isReady: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .size(8.dp)
-            .clip(CircleShape)
-            .background(
-                if (isReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+    val statusText = if (isReady) {
+        stringResource(R.string.engine_ready)
+    } else {
+        stringResource(R.string.engine_initializing)
+    }
+
+    Surface(
+        shape = CircleShape,
+        color = if (isReady) {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+        },
+        modifier = modifier.semantics(mergeDescendants = true) {
+            contentDescription = statusText
+        }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isReady) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+                    )
             )
-    )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isReady) {
+                    MaterialTheme.colorScheme.secondary
+                } else {
+                    MaterialTheme.colorScheme.tertiary
+                }
+            )
+        }
+    }
 }
 
 @Composable
@@ -404,6 +443,9 @@ private fun FilterChipRow(
     }
 }
 
+/**
+ * Tampilan kosong ketika tidak ada tugas unduhan yang sesuai dengan filter aktif.
+ */
 @Composable
 private fun EmptyStateView(
     filter: TaskFilter,
@@ -446,10 +488,24 @@ private fun EmptyStateView(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
+
+            if (filter == TaskFilter.ALL) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = stringResource(R.string.empty_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
 
+/**
+ * Dialog untuk memasukkan tautan URL unduhan secara manual beserta pemilihan preset format.
+ */
 @Composable
 private fun AddManualUrlDialog(
     defaultPreset: DownloadPreset,
@@ -577,6 +633,9 @@ private fun AddManualUrlDialog(
     )
 }
 
+/**
+ * Dialog untuk menampilkan log detail kesalahan unduhan dan menyalinnya ke papan klip.
+ */
 @Composable
 private fun TaskErrorDialog(
     task: DownloadTaskEntity,
