@@ -2,10 +2,12 @@
 
 # Keep youtubedl-android, ffmpeg, and aria2c JNI and core classes
 -keep class com.yausername.youtubedl_android.** { *; }
+-keep class com.yausername.youtubedl_common.** { *; }
 -keep class com.yausername.ffmpeg.** { *; }
 -keep class com.yausername.aria2c.** { *; }
 
-# Keep Jackson JSON deserialization for yt-dlp metadata
+# Keep Apache Commons IO and Jackson JSON deserialization for yt-dlp metadata
+-keep class org.apache.commons.io.** { *; }
 -keep class com.fasterxml.jackson.** { *; }
 -dontwarn java.beans.**
 -dontwarn javax.xml.**

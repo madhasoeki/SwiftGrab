@@ -89,9 +89,9 @@ class SwiftGrabApp : Application() {
             } catch (e: CancellationException) {
                 engineInitDeferred.complete(Result.failure(e))
                 throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize YoutubeDL/FFmpeg/Aria2c native engines", e)
-                engineInitDeferred.complete(Result.failure(e))
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize YoutubeDL/FFmpeg/Aria2c native engines", t)
+                engineInitDeferred.complete(Result.failure(t))
             }
         }
     }

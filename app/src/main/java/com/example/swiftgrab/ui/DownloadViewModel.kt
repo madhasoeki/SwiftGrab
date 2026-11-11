@@ -14,6 +14,7 @@ import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
 import com.example.swiftgrab.service.DownloadForegroundService
 import com.yausername.youtubedl_android.YoutubeDL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -184,7 +185,7 @@ class DownloadViewModel(
     fun getYtDlpVersion(): String {
         return try {
             YoutubeDL.getInstance().versionName(getApplication()) ?: "Siap"
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             "Siap"
         }
     }
@@ -213,9 +214,11 @@ class DownloadViewModel(
                 val currentVersion = YoutubeDL.getInstance().versionName(context) ?: "terbaru"
                 Log.i("DownloadViewModel", "yt-dlp update status: $status, current version: $currentVersion")
                 _ytdlUpdateStatus.value = YtDlpUpdateState.Success(currentVersion)
-            } catch (e: Exception) {
-                Log.e("DownloadViewModel", "Failed to update yt-dlp", e)
-                _ytdlUpdateStatus.value = YtDlpUpdateState.Error(e.message ?: "Gagal memperbarui")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e("DownloadViewModel", "Failed to update yt-dlp", t)
+                _ytdlUpdateStatus.value = YtDlpUpdateState.Error(t.message ?: "Gagal memperbarui")
             }
         }
     }
