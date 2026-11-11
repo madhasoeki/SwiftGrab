@@ -16,9 +16,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import com.example.swiftgrab.BuildConfig
 import com.example.swiftgrab.R
 import com.example.swiftgrab.SwiftGrabApp
+import com.example.swiftgrab.data.prefs.UserPreferences
 import com.example.swiftgrab.ui.MainActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -60,21 +62,37 @@ sealed interface ApkDownloadState {
     data object Idle : ApkDownloadState
     data class Downloading(
         val downloadId: Long,
+        val releaseTag: String,
         val progress: Float,
         val downloadedBytes: Long,
         val totalBytes: Long
     ) : ApkDownloadState
     data class ReadyToInstall(
         val downloadId: Long,
+        val releaseTag: String,
         val apkUri: Uri,
         val localFilePath: String?
     ) : ApkDownloadState
     data class PermissionRequired(
         val downloadId: Long,
+        val releaseTag: String,
         val apkUri: Uri,
         val localFilePath: String?
     ) : ApkDownloadState
-    data class Failed(val message: String) : ApkDownloadState
+    data class Failed(
+        val releaseTag: String,
+        val message: String
+    ) : ApkDownloadState
+
+    fun matchesRelease(info: AppUpdateInfo): Boolean {
+        return when (this) {
+            Idle -> false
+            is Downloading -> releaseTag == info.tagName
+            is ReadyToInstall -> releaseTag == info.tagName
+            is PermissionRequired -> releaseTag == info.tagName
+            is Failed -> releaseTag == info.tagName
+        }
+    }
 }
 
 /**
@@ -220,8 +238,10 @@ object AppUpdateManager {
     }
 
     /**
-     * Memilih aset APK paling sesuai dengan arsitektur ABI perangkat (mis. arm64-v8a),
-     * dengan fallback ke APK universal lalu APK generik atau aset pertama.
+     * Memilih aset APK paling sesuai dengan arsitektur ABI perangkat (mis. `arm64-v8a`,
+     * baik format `SwiftGrab-v0.0.3-arm64-v8a.apk` maupun `app-arm64-v8a-release.apk`),
+     * dengan fallback ke APK universal atau APK generik tanpa ABI. Jika tidak ada APK yang kompatibel,
+     * mengembalikan `null` alih-alih memilih ABI yang tidak kompatibel.
      */
     internal fun selectBestApkAsset(
         assets: List<ReleaseAsset>,
@@ -233,8 +253,7 @@ object AppUpdateManager {
             val cleanAbi = abi.trim().lowercase()
             if (cleanAbi.isEmpty()) continue
             val matched = assets.firstOrNull { asset ->
-                val lower = asset.name.lowercase()
-                lower.contains("-$cleanAbi.apk") || lower.contains("_$cleanAbi.apk")
+                detectAbiInAssetName(asset.name) == cleanAbi
             }
             if (matched != null) return matched
         }
@@ -244,13 +263,18 @@ object AppUpdateManager {
         }
         if (universal != null) return universal
 
-        val generic = assets.firstOrNull { asset ->
-            val lower = asset.name.lowercase()
-            KNOWN_ABI_MARKERS.none { marker ->
-                lower.contains("-$marker.apk") || lower.contains("_$marker.apk")
-            }
+        return assets.firstOrNull { asset ->
+            detectAbiInAssetName(asset.name) == null
         }
-        return generic ?: assets.first()
+    }
+
+    internal fun detectAbiInAssetName(fileName: String): String? {
+        val stem = fileName.substringBeforeLast('.', fileName).lowercase()
+        // Periksa dari marker terpanjang agar "x86_64" tidak tertukar dengan "x86"
+        return KNOWN_ABI_MARKERS.firstOrNull { marker ->
+            val pattern = Regex("(^|[-_.])${Regex.escape(marker)}($|[-_.])")
+            pattern.containsMatchIn(stem)
+        }
     }
 
     /**
@@ -343,10 +367,34 @@ object AppUpdateManager {
         return if (baseName.endsWith(".apk", ignoreCase = true)) baseName else "$baseName.apk"
     }
 
+    internal fun resolveUniqueApkFileName(destDir: File?, baseFileName: String): String {
+        if (destDir == null) return baseFileName
+        val candidate = File(destDir, baseFileName)
+        if (!candidate.exists()) return baseFileName
+
+        val dotIdx = baseFileName.lastIndexOf('.')
+        val stem = if (dotIdx > 0) baseFileName.substring(0, dotIdx) else baseFileName
+        val ext = if (dotIdx > 0) baseFileName.substring(dotIdx) else ""
+
+        var index = 1
+        while (true) {
+            val nextName = "${stem}_$index$ext"
+            if (!File(destDir, nextName).exists()) {
+                return nextName
+            }
+            index++
+        }
+    }
+
     /**
-     * Memulai pengunduhan berkas APK melalui [DownloadManager] ke folder publik Download.
+     * Memulai pengunduhan berkas APK melalui [DownloadManager] ke nama tujuan unik tanpa menghapus
+     * APK lama, lalu menyimpan ID unduhan serta identitas rilis agar progres dapat dipulihkan.
      */
-    fun enqueueApkDownload(context: Context, updateInfo: AppUpdateInfo): Result<Long> {
+    fun enqueueApkDownload(
+        context: Context,
+        updateInfo: AppUpdateInfo,
+        preferences: UserPreferences? = null
+    ): Result<Long> {
         val apkUrl = updateInfo.apkDownloadUrl
         if (apkUrl.isNullOrBlank() || !isValidHttpsUrl(apkUrl)) {
             return Result.failure(IllegalArgumentException("URL berkas APK tidak ditemukan pada rilis ini."))
@@ -363,7 +411,16 @@ object AppUpdateManager {
             ) == PackageManager.PERMISSION_GRANTED
 
         return try {
-            val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
+            val destDir = if (canWritePublicDirect) {
+                runCatching {
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                }.getOrNull()
+            } else {
+                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uniqueFileName = resolveUniqueApkFileName(destDir, fileName)
+
+            val request = DownloadManager.Request(apkUrl.toUri()).apply {
                 setTitle("Update SwiftGrab ${updateInfo.tagName}")
                 setDescription(context.getString(R.string.update_downloading_desc))
                 setMimeType("application/vnd.android.package-archive")
@@ -373,30 +430,15 @@ object AppUpdateManager {
                 addRequestHeader("User-Agent", "SwiftGrab/${BuildConfig.VERSION_NAME}")
 
                 if (canWritePublicDirect) {
-                    runCatching {
-                        val publicDownload = Environment.getExternalStoragePublicDirectory(
-                            Environment.DIRECTORY_DOWNLOADS
-                        )
-                        val existing = File(publicDownload, fileName)
-                        if (existing.exists()) {
-                            existing.delete()
-                        }
-                    }
-                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, uniqueFileName)
                 } else {
-                    runCatching {
-                        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { dir ->
-                            val existing = File(dir, fileName)
-                            if (existing.exists()) {
-                                existing.delete()
-                            }
-                        }
-                    }
-                    setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+                    setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, uniqueFileName)
                 }
             }
 
             val downloadId = downloadManager.enqueue(request)
+            val prefs = preferences ?: UserPreferences(context)
+            prefs.saveActiveApkDownload(downloadId, updateInfo.tagName)
             Result.success(downloadId)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enqueue APK download", e)
@@ -405,97 +447,138 @@ object AppUpdateManager {
     }
 
     /**
+     * Memulihkan state unduhan APK yang sebelumnya diantrekan di [DownloadManager] setelah proses
+     * aplikasi dimulai ulang, baik yang masih berjalan maupun yang sudah selesai diunduh.
+     */
+    fun restorePersistedApkDownloadState(
+        context: Context,
+        preferences: UserPreferences
+    ): ApkDownloadState? {
+        val (downloadId, releaseTag) = preferences.getActiveApkDownload() ?: return null
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+            ?: return null
+
+        val snapshot = queryApkDownloadSnapshot(context, downloadManager, downloadId, releaseTag)
+        if (snapshot == null || snapshot is ApkDownloadState.Failed) {
+            preferences.clearActiveApkDownload()
+            return null
+        }
+        return snapshot
+    }
+
+    /**
      * Mengamati progres dan hasil pengunduhan APK dari [DownloadManager] secara berkala.
      */
-    fun observeApkDownload(context: Context, downloadId: Long): Flow<ApkDownloadState> = flow {
+    fun observeApkDownload(
+        context: Context,
+        downloadId: Long,
+        releaseTag: String,
+        preferences: UserPreferences? = null
+    ): Flow<ApkDownloadState> = flow {
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
         if (downloadManager == null) {
-            emit(ApkDownloadState.Failed("DownloadManager tidak tersedia."))
+            emit(ApkDownloadState.Failed(releaseTag, "DownloadManager tidak tersedia."))
             return@flow
         }
+        val prefs = preferences ?: UserPreferences(context)
 
         while (currentCoroutineContext().isActive) {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            var shouldStop = false
-
-            downloadManager.query(query)?.use { cursor ->
-                if (!cursor.moveToFirst()) {
-                    emit(ApkDownloadState.Failed("Unduhan dibatalkan."))
-                    shouldStop = true
-                } else {
-                    val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    val downloadedIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                    val totalIdx = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                    val localUriIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                    val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-
-                    val status = if (statusIdx >= 0) cursor.getInt(statusIdx) else -1
-                    val downloaded = if (downloadedIdx >= 0) cursor.getLong(downloadedIdx).coerceAtLeast(0L) else 0L
-                    val total = if (totalIdx >= 0) cursor.getLong(totalIdx) else -1L
-                    val localUriStr = if (localUriIdx >= 0) cursor.getString(localUriIdx) else null
-                    val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else 0
-
-                    when (status) {
-                        DownloadManager.STATUS_PENDING,
-                        DownloadManager.STATUS_PAUSED,
-                        DownloadManager.STATUS_RUNNING -> {
-                            val progress = if (total > 0L) {
-                                (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                            emit(
-                                ApkDownloadState.Downloading(
-                                    downloadId = downloadId,
-                                    progress = progress,
-                                    downloadedBytes = downloaded,
-                                    totalBytes = total.coerceAtLeast(0L)
-                                )
-                            )
-                        }
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            val resolved = resolveInstallUri(
-                                context = context,
-                                downloadManager = downloadManager,
-                                downloadId = downloadId,
-                                localUriStr = localUriStr
-                            )
-                            if (resolved == null) {
-                                emit(ApkDownloadState.Failed("Berkas APK hasil unduhan tidak dapat diakses."))
-                            } else if (canInstallPackages(context)) {
-                                emit(
-                                    ApkDownloadState.ReadyToInstall(
-                                        downloadId = downloadId,
-                                        apkUri = resolved.first,
-                                        localFilePath = resolved.second
-                                    )
-                                )
-                            } else {
-                                emit(
-                                    ApkDownloadState.PermissionRequired(
-                                        downloadId = downloadId,
-                                        apkUri = resolved.first,
-                                        localFilePath = resolved.second
-                                    )
-                                )
-                            }
-                            shouldStop = true
-                        }
-                        DownloadManager.STATUS_FAILED -> {
-                            emit(ApkDownloadState.Failed(mapDownloadFailureReason(reason)))
-                            shouldStop = true
-                        }
-                    }
-                }
-            } ?: run {
-                emit(ApkDownloadState.Failed("Gagal memeriksa status unduhan."))
-                shouldStop = true
+            val snapshot = queryApkDownloadSnapshot(context, downloadManager, downloadId, releaseTag)
+            if (snapshot == null) {
+                prefs.clearActiveApkDownload()
+                emit(ApkDownloadState.Failed(releaseTag, "Unduhan dibatalkan."))
+                break
             }
 
-            if (shouldStop) break
+            emit(snapshot)
+
+            when (snapshot) {
+                is ApkDownloadState.ReadyToInstall,
+                is ApkDownloadState.PermissionRequired -> break
+                is ApkDownloadState.Failed -> {
+                    prefs.clearActiveApkDownload()
+                    break
+                }
+                else -> Unit
+            }
+
             delay(POLL_INTERVAL_MS)
         }
     }.flowOn(Dispatchers.IO)
+
+    internal fun queryApkDownloadSnapshot(
+        context: Context,
+        downloadManager: DownloadManager,
+        downloadId: Long,
+        releaseTag: String
+    ): ApkDownloadState? {
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        return downloadManager.query(query)?.use { cursor ->
+            if (!cursor.moveToFirst()) {
+                return@use null
+            }
+
+            val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            val downloadedIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+            val totalIdx = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+            val localUriIdx = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+            val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+
+            val status = if (statusIdx >= 0) cursor.getInt(statusIdx) else -1
+            val downloaded = if (downloadedIdx >= 0) cursor.getLong(downloadedIdx).coerceAtLeast(0L) else 0L
+            val total = if (totalIdx >= 0) cursor.getLong(totalIdx) else -1L
+            val localUriStr = if (localUriIdx >= 0) cursor.getString(localUriIdx) else null
+            val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else 0
+
+            when (status) {
+                DownloadManager.STATUS_PENDING,
+                DownloadManager.STATUS_PAUSED,
+                DownloadManager.STATUS_RUNNING -> {
+                    val progress = if (total > 0L) {
+                        (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    ApkDownloadState.Downloading(
+                        downloadId = downloadId,
+                        releaseTag = releaseTag,
+                        progress = progress,
+                        downloadedBytes = downloaded,
+                        totalBytes = total.coerceAtLeast(0L)
+                    )
+                }
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    val resolved = resolveInstallUri(
+                        context = context,
+                        downloadManager = downloadManager,
+                        downloadId = downloadId,
+                        localUriStr = localUriStr
+                    )
+                    if (resolved == null) {
+                        ApkDownloadState.Failed(releaseTag, "Berkas APK hasil unduhan tidak dapat diakses.")
+                    } else if (canInstallPackages(context)) {
+                        ApkDownloadState.ReadyToInstall(
+                            downloadId = downloadId,
+                            releaseTag = releaseTag,
+                            apkUri = resolved.first,
+                            localFilePath = resolved.second
+                        )
+                    } else {
+                        ApkDownloadState.PermissionRequired(
+                            downloadId = downloadId,
+                            releaseTag = releaseTag,
+                            apkUri = resolved.first,
+                            localFilePath = resolved.second
+                        )
+                    }
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    ApkDownloadState.Failed(releaseTag, mapDownloadFailureReason(reason))
+                }
+                else -> null
+            }
+        }
+    }
 
     private fun resolveInstallUri(
         context: Context,
@@ -504,7 +587,7 @@ object AppUpdateManager {
         localUriStr: String?
     ): Pair<Uri, String?>? {
         if (!localUriStr.isNullOrBlank() && localUriStr.startsWith("file://")) {
-            val filePath = Uri.parse(localUriStr).path
+            val filePath = localUriStr.toUri().path
             if (!filePath.isNullOrBlank()) {
                 val apkFile = File(filePath)
                 if (apkFile.exists() && apkFile.canRead()) {
@@ -579,7 +662,7 @@ object AppUpdateManager {
     fun launchUnknownSourcesSettings(context: Context): Boolean {
         val intent = Intent(
             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}")
+            "package:${context.packageName}".toUri()
         ).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -597,7 +680,7 @@ object AppUpdateManager {
      */
     fun openReleasePage(context: Context, url: String) {
         val safeUrl = if (isValidHttpsUrl(url)) url else GITHUB_RELEASES_PAGE_URL
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeUrl)).apply {
+        val intent = Intent(Intent.ACTION_VIEW, safeUrl.toUri()).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         try {

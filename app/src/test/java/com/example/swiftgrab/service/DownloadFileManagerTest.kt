@@ -8,6 +8,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class DownloadFileManagerTest {
 
@@ -136,5 +138,67 @@ class DownloadFileManagerTest {
         assertTrue(first.exists())
         assertTrue(second.exists())
         assertTrue(third.exists())
+    }
+
+    @Test
+    fun `reserveUniqueTargetFile is thread safe under concurrent exports`() {
+        val targetDir = tempFolder.newFolder("concurrent_reserve")
+        val threadCount = 8
+        val executor = Executors.newFixedThreadPool(threadCount)
+        try {
+            val tasks = (1..threadCount).map {
+                Callable {
+                    DownloadFileManager.reserveUniqueTargetFile(
+                        targetDir = targetDir,
+                        fileName = "same.mp4",
+                        timestampProvider = { 555L }
+                    )
+                }
+            }
+            val reserved = executor.invokeAll(tasks).map { it.get().absolutePath }.toSet()
+            assertEquals(threadCount, reserved.size)
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `safeStagingDir rejects path traversal`() {
+        val baseDir = tempFolder.newFolder("staging_base")
+        DownloadFileManager.safeStagingDir(baseDir, "../outside")
+    }
+
+    @Test
+    fun `isPathWithinAllowedRoots enforces FileProvider root boundaries`() {
+        val roots = listOf(
+            "/storage/emulated/0/Download",
+            "/storage/emulated/0/Android/data/com.example.swiftgrab/files/Download",
+            "/data/user/0/com.example.swiftgrab/files/downloads"
+        )
+
+        assertTrue(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "/storage/emulated/0/Download/SwiftGrab/video.mp4",
+                roots
+            )
+        )
+        assertFalse(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "/storage/emulated/0/DownloadBackup/video.mp4",
+                roots
+            )
+        )
+        assertFalse(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "/storage/9876-5432/Movies/video.mp4",
+                roots
+            )
+        )
+        assertFalse(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "/storage/emulated/0/Movies/video.mp4",
+                roots
+            )
+        )
     }
 }

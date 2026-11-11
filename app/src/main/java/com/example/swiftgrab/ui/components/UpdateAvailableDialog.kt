@@ -66,7 +66,12 @@ fun UpdateAvailableDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDownloading = downloadState is ApkDownloadState.Downloading
+    val effectiveDownloadState = if (downloadState.matchesRelease(updateInfo)) {
+        downloadState
+    } else {
+        ApkDownloadState.Idle
+    }
+    val isDownloading = effectiveDownloadState is ApkDownloadState.Downloading
     val hasApkAsset = !updateInfo.apkDownloadUrl.isNullOrBlank()
 
     AlertDialog(
@@ -150,20 +155,20 @@ fun UpdateAvailableDialog(
                     }
                 }
 
-                when (downloadState) {
+                when (effectiveDownloadState) {
                     is ApkDownloadState.Downloading -> {
                         Spacer(modifier = Modifier.height(14.dp))
-                        val percent = (downloadState.progress * 100f).toInt().coerceIn(0, 100)
-                        val downloadedLabel = formatMegabytes(downloadState.downloadedBytes)
-                        val totalLabel = if (downloadState.totalBytes > 0L) {
-                            " / ${formatMegabytes(downloadState.totalBytes)}"
+                        val percent = (effectiveDownloadState.progress * 100f).toInt().coerceIn(0, 100)
+                        val downloadedLabel = formatMegabytes(effectiveDownloadState.downloadedBytes)
+                        val totalLabel = if (effectiveDownloadState.totalBytes > 0L) {
+                            " / ${formatMegabytes(effectiveDownloadState.totalBytes)}"
                         } else {
                             ""
                         }
 
-                        if (downloadState.totalBytes > 0L) {
+                        if (effectiveDownloadState.totalBytes > 0L) {
                             LinearProgressIndicator(
-                                progress = { downloadState.progress.coerceIn(0f, 1f) },
+                                progress = { effectiveDownloadState.progress.coerceIn(0f, 1f) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(7.dp)
@@ -194,7 +199,7 @@ fun UpdateAvailableDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = if (downloadState.totalBytes > 0L) {
+                                text = if (effectiveDownloadState.totalBytes > 0L) {
                                     "$percent% ($downloadedLabel$totalLabel)"
                                 } else {
                                     downloadedLabel
@@ -228,7 +233,7 @@ fun UpdateAvailableDialog(
                         Spacer(modifier = Modifier.height(12.dp))
                         StatusNoticeBanner(
                             icon = Icons.Rounded.ErrorOutline,
-                            text = downloadState.message,
+                            text = effectiveDownloadState.message,
                             containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                             contentColor = MaterialTheme.colorScheme.error
                         )
@@ -238,7 +243,7 @@ fun UpdateAvailableDialog(
             }
         },
         confirmButton = {
-            when (downloadState) {
+            when (effectiveDownloadState) {
                 is ApkDownloadState.ReadyToInstall -> {
                     Button(
                         onClick = onInstallNow,
@@ -299,7 +304,7 @@ fun UpdateAvailableDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (downloadState is ApkDownloadState.Failed) {
+                                text = if (effectiveDownloadState is ApkDownloadState.Failed) {
                                     stringResource(R.string.update_dialog_retry)
                                 } else {
                                     stringResource(R.string.update_dialog_download_install)

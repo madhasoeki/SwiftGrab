@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <external-path
-        name="external_storage"
-        path="." />
+        name="public_downloads"
+        path="Download/" />
     <external-files-path
         name="external_downloads"
         path="Download/" />
     <files-path
         name="internal_downloads"
         path="downloads/" />
+    <cache-path
+        name="shared_media_cache"
+        path="shared_media/" />
 </paths>

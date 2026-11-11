@@ -14,10 +14,14 @@ import androidx.core.net.toUri
 import com.example.swiftgrab.SwiftGrabApp
 import com.example.swiftgrab.data.prefs.UserPreferences
 import com.example.swiftgrab.util.StorageHelper
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 data class FinalizedDownload(
     val outputPath: String,
@@ -30,7 +34,24 @@ object DownloadFileManager {
 
     private const val TAG = "DownloadFileManager"
     private const val FOLDER_NAME = "SwiftGrab"
+    private const val COPY_BUFFER_SIZE = 32 * 1024
     private val exportLock = Any()
+    private val taskExportLocks = ConcurrentHashMap<String, Any>()
+    private val canceledExportTasks = ConcurrentHashMap.newKeySet<String>()
+
+    internal fun getTaskLock(taskId: String): Any =
+        taskExportLocks.getOrPut(taskId) { Any() }
+
+    fun markTaskCanceled(taskId: String) {
+        canceledExportTasks.add(taskId)
+    }
+
+    fun clearTaskCanceled(taskId: String) {
+        canceledExportTasks.remove(taskId)
+    }
+
+    fun isTaskCanceled(taskId: String): Boolean =
+        canceledExportTasks.contains(taskId)
 
     /**
      * Direktori publik bawaan untuk unduhan SwiftGrab:
@@ -41,6 +62,46 @@ object DownloadFileManager {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
             FOLDER_NAME
         )
+    }
+
+    /**
+     * Mengembalikan teks path folder default untuk ditampilkan di UI tanpa membuat direktori di disk.
+     */
+    fun getDisplayDefaultDownloadPath(): String {
+        return try {
+            getDefaultDownloadDir().absolutePath
+        } catch (_: Exception) {
+            "Download/$FOLDER_NAME"
+        }
+    }
+
+    /**
+     * Memeriksa apakah berkas berada di dalam root [FileProvider] yang dikonfigurasi (`Download/`
+     * atau penyimpanan internal/eksternal aplikasi) sehingga aman dibagikan sebagai file path.
+     */
+    fun isPathShareableViaFileProvider(context: Context, file: File): Boolean {
+        val canonicalPath = try {
+            file.canonicalPath
+        } catch (_: Exception) {
+            return false
+        }
+        val allowedRoots = buildList {
+            try {
+                add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).canonicalPath)
+            } catch (_: Exception) {}
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let {
+                runCatching { add(it.canonicalPath) }
+            }
+            runCatching { add(File(context.filesDir, "downloads").canonicalPath) }
+            runCatching { add(File(context.cacheDir, "shared_media").canonicalPath) }
+        }
+        return isPathWithinAllowedRoots(canonicalPath, allowedRoots)
+    }
+
+    internal fun isPathWithinAllowedRoots(canonicalPath: String, allowedRoots: List<String>): Boolean {
+        return allowedRoots.any { root ->
+            canonicalPath == root || canonicalPath.startsWith("$root${File.separator}")
+        }
     }
 
     /**
@@ -109,32 +170,58 @@ object DownloadFileManager {
      * Menghapus semua berkas unduhan sementara (.part, .aria2, .ytdl, dll.) untuk tugas yang dibatalkan.
      */
     fun cleanupTemporaryFiles(context: Context, taskId: String) {
+        synchronized(getTaskLock(taskId)) {
+            try {
+                val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                    ?: File(context.filesDir, "downloads")
+                val dirsToDelete = listOf(
+                    safeStagingDir(File(appDownloadsBase, "staging"), taskId),
+                    safeStagingDir(File(appDownloadsBase, FOLDER_NAME), taskId),
+                    safeStagingDir(getDownloadDir(context), taskId)
+                )
+                for (stagingDir in dirsToDelete) {
+                    if (stagingDir.exists()) {
+                        stagingDir.deleteRecursively()
+                        Log.d(TAG, "Deleted staging directory for task: $taskId (${stagingDir.absolutePath})")
+                    }
+                }
+
+                // Bersihkan berkas sisa di direktori unduhan jika ada
+                val downloadDir = getDownloadDir(context)
+                downloadDir.listFiles { file ->
+                    file.name.contains(taskId) && (
+                        file.name.endsWith(".part") ||
+                            file.name.endsWith(".aria2") ||
+                            file.name.endsWith(".ytdl")
+                        )
+                }?.forEach { it.delete() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cleaning up temporary files for task: $taskId", e)
+            }
+        }
+    }
+
+    /**
+     * Menghapus berkas atau URI hasil ekspor apabila pembatalan terjadi tepat setelah finalisasi.
+     */
+    fun rollbackExportedDownload(context: Context, finalized: FinalizedDownload) {
         try {
-            val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                ?: File(context.filesDir, "downloads")
-            val dirsToDelete = listOf(
-                safeStagingDir(File(appDownloadsBase, "staging"), taskId),
-                safeStagingDir(File(appDownloadsBase, FOLDER_NAME), taskId),
-                safeStagingDir(getDownloadDir(context), taskId)
-            )
-            for (stagingDir in dirsToDelete) {
-                if (stagingDir.exists()) {
-                    stagingDir.deleteRecursively()
-                    Log.d(TAG, "Deleted staging directory for task: $taskId (${stagingDir.absolutePath})")
+            if (finalized.outputPath.startsWith("content://")) {
+                val uri = finalized.outputPath.toUri()
+                val deletedByDoc = runCatching {
+                    DocumentsContract.deleteDocument(context.contentResolver, uri)
+                }.getOrDefault(false)
+                if (!deletedByDoc) {
+                    context.contentResolver.delete(uri, null, null)
                 }
             }
-
-            // Bersihkan berkas sisa di direktori unduhan jika ada
-            val downloadDir = getDownloadDir(context)
-            downloadDir.listFiles { file ->
-                file.name.contains(taskId) && (
-                    file.name.endsWith(".part") ||
-                        file.name.endsWith(".aria2") ||
-                        file.name.endsWith(".ytdl")
-                    )
-            }?.forEach { it.delete() }
+            finalized.file?.let { exportedFile ->
+                if (exportedFile.exists()) {
+                    exportedFile.delete()
+                }
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up temporary files for task: $taskId", e)
+            Log.w(TAG, "Unable to rollback exported download ${finalized.outputPath}: ${e.message}")
         }
     }
 
@@ -173,7 +260,16 @@ object DownloadFileManager {
      * @throws IOException jika seluruh jalur ekspor gagal sehingga tugas tidak ditandai selesai palsu.
      */
     @Throws(IOException::class)
-    fun finalizeCompletedMedia(context: Context, taskId: String): FinalizedDownload? {
+    fun finalizeCompletedMedia(
+        context: Context,
+        taskId: String,
+        isCanceled: () -> Boolean = { false }
+    ): FinalizedDownload? {
+        val checkCanceled = { isTaskCanceled(taskId) || isCanceled() || Thread.currentThread().isInterrupted }
+        if (checkCanceled()) {
+            throw CancellationException("Download canceled before export")
+        }
+
         val appDownloadsBase = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: File(context.filesDir, "downloads")
         val stagingDir = safeStagingDir(File(appDownloadsBase, "staging"), taskId).takeIf { it.exists() }
@@ -193,83 +289,76 @@ object DownloadFileManager {
         }
         val customPath = prefs?.getCustomDownloadPath()
         val customUriStr = prefs?.getCustomDownloadUri()
-        val targetDir = getDownloadDir(context)
 
-        // 1. Jika pengguna memilih folder SAF tanpa path berkas fisik langsung, tulis via SAF
-        if (!customUriStr.isNullOrBlank() && customPath.isNullOrBlank()) {
-            val treeUri = customUriStr.toUri()
-            val docUri = copyToSafTreeUri(context, completed, treeUri)
-            if (docUri != null) {
-                stagingDir.deleteRecursively()
-                return buildSafFinalizedResult(context, docUri, fileSize, displayName)
-            }
-        }
-
-        // 2. Coba pindahkan langsung ke File target (Download/SwiftGrab atau folder path SAF) secara atomik
-        val directMoved: File? = run {
-            var allocatedTarget: File? = null
-            try {
-                if (!targetDir.exists()) {
-                    targetDir.mkdirs()
-                }
-                val targetFile = reserveUniqueTargetFile(targetDir, completed.name)
-                allocatedTarget = targetFile
-                val moved = if (completed.renameTo(targetFile)) {
-                    targetFile
-                } else {
-                    copyAndDelete(completed, targetFile)
-                }
-                if (moved.exists() && moved.length() > 0L && (fileSize <= 0L || moved.length() == fileSize)) {
-                    moved
-                } else {
-                    if (completed.exists()) {
-                        allocatedTarget.delete()
-                    }
-                    null
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Direct file move failed for ${targetDir.absolutePath}: ${e.message}")
-                allocatedTarget?.let {
-                    if (it.exists() && completed.exists()) {
-                        it.delete()
-                    }
-                }
-                null
-            }
-        }
-
-        if (directMoved != null) {
-            stagingDir.deleteRecursively()
-            scanMediaFile(context, directMoved)
-            return FinalizedDownload(
-                outputPath = directMoved.absolutePath,
-                fileSize = directMoved.length().takeIf { it > 0L } ?: fileSize,
-                file = directMoved,
-                displayName = displayName
-            )
-        }
-
-        // 3. Jika gagal via File (mis. SD Card atau folder SAF terproteksi), tulis via SAF Tree URI
+        // 1. Jika pengguna memilih folder SAF, jangan pernah fallback ke folder publik Download/SwiftGrab
         if (!customUriStr.isNullOrBlank()) {
+            val selectedDir = customPath?.takeIf { it.isNotBlank() }?.let { File(it) }
+            if (selectedDir != null && isPathShareableViaFileProvider(context, selectedDir)) {
+                val directSelected = moveDirectlyToTargetDir(
+                    context = context,
+                    taskId = taskId,
+                    completed = completed,
+                    targetDir = selectedDir,
+                    fileSize = fileSize,
+                    displayName = displayName,
+                    stagingDir = stagingDir,
+                    checkCanceled = checkCanceled
+                )
+                if (directSelected != null) {
+                    return directSelected
+                }
+            }
+
             val treeUri = customUriStr.toUri()
-            val docUri = copyToSafTreeUri(context, completed, treeUri)
+            val docUri = copyToSafTreeUri(context, taskId, completed, treeUri, checkCanceled)
             if (docUri != null) {
-                stagingDir.deleteRecursively()
+                synchronized(getTaskLock(taskId)) {
+                    if (checkCanceled()) {
+                        deleteSafDocumentQuietly(context, docUri)
+                        throw CancellationException("Download canceled during SAF export")
+                    }
+                    stagingDir.deleteRecursively()
+                }
                 return buildSafFinalizedResult(context, docUri, fileSize, displayName)
             }
+
+            Log.e(TAG, "SAF export failed for $customUriStr; preserving staged file at ${completed.absolutePath}")
+            throw IOException("Gagal mengekspor berkas ke folder SAF yang dipilih. Periksa izin akses folder di Pengaturan.")
         }
 
-        // 4. Fallback ke MediaStore.Downloads (Android 10+) jika penulisan File langsung dibatasi Scoped Storage
-        if (customUriStr.isNullOrBlank()) {
-            val mediaStoreUri = copyToMediaStoreDownloads(context, completed)
+        // 2. Folder publik default Download/SwiftGrab (atau customPath langsung tanpa SAF URI)
+        val targetDir = getDownloadDir(context)
+        val directMoved = moveDirectlyToTargetDir(
+            context = context,
+            taskId = taskId,
+            completed = completed,
+            targetDir = targetDir,
+            fileSize = fileSize,
+            displayName = displayName,
+            stagingDir = stagingDir,
+            checkCanceled = checkCanceled
+        )
+        if (directMoved != null) {
+            return directMoved
+        }
+
+        // 3. Fallback ke MediaStore.Downloads (Android 10+) jika penulisan File langsung ke Download/SwiftGrab dibatasi
+        if (customPath.isNullOrBlank()) {
+            val mediaStoreUri = copyToMediaStoreDownloads(context, taskId, completed, checkCanceled)
             if (mediaStoreUri != null) {
-                stagingDir.deleteRecursively()
+                synchronized(getTaskLock(taskId)) {
+                    if (checkCanceled()) {
+                        deleteMediaStoreItemQuietly(context, mediaStoreUri)
+                        throw CancellationException("Download canceled during MediaStore export")
+                    }
+                    stagingDir.deleteRecursively()
+                }
                 val resolvedPath = resolveMediaStoreFilePath(context, mediaStoreUri)
                 if (resolvedPath != null) {
                     val mediaFile = File(resolvedPath)
                     if (mediaFile.exists() && mediaFile.length() > 0L && (fileSize <= 0L || mediaFile.length() == fileSize)) {
                         scanMediaPath(context, mediaFile.absolutePath)
-                        if (mediaFile.canRead()) {
+                        if (mediaFile.canRead() && isPathShareableViaFileProvider(context, mediaFile)) {
                             return FinalizedDownload(
                                 outputPath = mediaFile.absolutePath,
                                 fileSize = mediaFile.length(),
@@ -295,6 +384,73 @@ object DownloadFileManager {
         throw IOException("Gagal mengekspor berkas ke folder penyimpanan tujuan. Periksa izin penyimpanan atau pilih folder melalui Pengaturan.")
     }
 
+    private fun moveDirectlyToTargetDir(
+        context: Context,
+        taskId: String,
+        completed: File,
+        targetDir: File,
+        fileSize: Long,
+        displayName: String,
+        stagingDir: File,
+        checkCanceled: () -> Boolean
+    ): FinalizedDownload? {
+        var allocatedTarget: File? = null
+        val moved: File? = try {
+            if (checkCanceled()) {
+                throw CancellationException("Download canceled before direct move")
+            }
+            if (!targetDir.exists()) {
+                targetDir.mkdirs()
+            }
+            val targetFile = reserveUniqueTargetFile(targetDir, completed.name)
+            allocatedTarget = targetFile
+            val resultFile = if (completed.renameTo(targetFile)) {
+                targetFile
+            } else {
+                copyAndDelete(completed, targetFile, checkCanceled)
+            }
+            synchronized(getTaskLock(taskId)) {
+                if (checkCanceled()) {
+                    if (resultFile.exists()) {
+                        resultFile.delete()
+                    }
+                    throw CancellationException("Download canceled during direct move")
+                }
+                if (resultFile.exists() && resultFile.length() > 0L && (fileSize <= 0L || resultFile.length() == fileSize)) {
+                    stagingDir.deleteRecursively()
+                    resultFile
+                } else {
+                    if (completed.exists()) {
+                        allocatedTarget.delete()
+                    }
+                    null
+                }
+            }
+        } catch (ce: CancellationException) {
+            allocatedTarget?.let { if (it.exists()) it.delete() }
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct file move failed for ${targetDir.absolutePath}: ${e.message}")
+            allocatedTarget?.let {
+                if (it.exists() && completed.exists()) {
+                    it.delete()
+                }
+            }
+            null
+        }
+
+        if (moved != null) {
+            scanMediaFile(context, moved)
+            return FinalizedDownload(
+                outputPath = moved.absolutePath,
+                fileSize = moved.length().takeIf { it > 0L } ?: fileSize,
+                file = moved,
+                displayName = displayName
+            )
+        }
+        return null
+    }
+
     private fun buildSafFinalizedResult(
         context: Context,
         docUri: Uri,
@@ -306,7 +462,13 @@ object DownloadFileManager {
             // Pindai hanya jika URI SAF dipetakan ke path sistem berkas lokal (bukan content:// URI).
             scanMediaPath(context, resolvedPath)
             val resolvedFile = File(resolvedPath)
-            if (resolvedFile.exists() && resolvedFile.canRead() && resolvedFile.length() > 0L && (fallbackSize <= 0L || resolvedFile.length() == fallbackSize)) {
+            if (
+                resolvedFile.exists() &&
+                resolvedFile.canRead() &&
+                resolvedFile.length() > 0L &&
+                (fallbackSize <= 0L || resolvedFile.length() == fallbackSize) &&
+                isPathShareableViaFileProvider(context, resolvedFile)
+            ) {
                 return FinalizedDownload(
                     outputPath = resolvedFile.absolutePath,
                     fileSize = resolvedFile.length(),
@@ -315,8 +477,8 @@ object DownloadFileManager {
                 )
             }
         }
-        // Ekspor SAF ke penyedia non-lokal tanpa path fisik tidak dipindai dengan MediaScannerConnection
-        // karena MediaScanner hanya menerima path lokal; berkas mengandalkan pengindeksan penyedia SAF.
+        // Ekspor SAF di luar root FileProvider atau penyedia non-lokal tetap memakai docUri SAF
+        // agar open/share bekerja tanpa perlu memperluas cakupan FileProvider ke seluruh storage.
         return FinalizedDownload(
             outputPath = docUri.toString(),
             fileSize = fallbackSize,
@@ -452,14 +614,36 @@ object DownloadFileManager {
         }
     }
 
-    private fun copyAndDelete(source: File, destination: File): File {
+    private fun copyStreamWithCancellation(
+        input: InputStream,
+        output: OutputStream,
+        checkCanceled: () -> Boolean
+    ): Long {
+        val buffer = ByteArray(COPY_BUFFER_SIZE)
+        var totalCopied = 0L
+        while (true) {
+            if (checkCanceled()) {
+                throw CancellationException("Download canceled during stream copy")
+            }
+            val bytesRead = input.read(buffer)
+            if (bytesRead == -1) break
+            output.write(buffer, 0, bytesRead)
+            totalCopied += bytesRead
+        }
+        output.flush()
+        return totalCopied
+    }
+
+    private fun copyAndDelete(
+        source: File,
+        destination: File,
+        checkCanceled: () -> Boolean = { false }
+    ): File {
         try {
             val expectedBytes = source.length()
             val copiedBytes = FileInputStream(source).use { input ->
                 FileOutputStream(destination).use { output ->
-                    val copied = input.copyTo(output)
-                    output.flush()
-                    copied
+                    copyStreamWithCancellation(input, output, checkCanceled)
                 }
             }
             if (copiedBytes != expectedBytes || destination.length() != expectedBytes) {
@@ -467,21 +651,26 @@ object DownloadFileManager {
             }
             source.delete()
             return destination
-        } catch (e: Exception) {
-            if (destination.exists() && source.exists()) {
+        } catch (t: Throwable) {
+            if (destination.exists() && (source.exists() || t is CancellationException)) {
                 destination.delete()
             }
-            throw e
+            throw t
         }
     }
 
     private fun copyToSafTreeUri(
         context: Context,
+        taskId: String,
         source: File,
-        treeUri: Uri
+        treeUri: Uri,
+        checkCanceled: () -> Boolean
     ): Uri? {
         var createdDocUri: Uri? = null
         return try {
+            if (checkCanceled()) {
+                throw CancellationException("Download canceled before SAF export")
+            }
             val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
             val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
             val mimeType = resolveMimeType(source)
@@ -498,39 +687,43 @@ object DownloadFileManager {
                 ?: throw IOException("Unable to open SAF output stream for $docUri")
             val copiedBytes = stream.use { output ->
                 FileInputStream(source).use { input ->
-                    val copied = input.copyTo(output)
-                    output.flush()
-                    copied
+                    copyStreamWithCancellation(input, output, checkCanceled)
                 }
             }
             if (copiedBytes != expectedBytes) {
                 throw IOException("Incomplete SAF copy: expected $expectedBytes, copied $copiedBytes")
             }
 
-            source.delete()
+            synchronized(getTaskLock(taskId)) {
+                if (checkCanceled()) {
+                    throw CancellationException("Download canceled before finalizing SAF document")
+                }
+                source.delete()
+            }
             docUri
+        } catch (ce: CancellationException) {
+            createdDocUri?.let { deleteSafDocumentQuietly(context, it) }
+            throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy file to SAF tree URI: $treeUri", e)
-            createdDocUri?.let { uri ->
-                try {
-                    if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) {
-                        context.contentResolver.delete(uri, null, null)
-                    }
-                } catch (_: Exception) {
-                    try {
-                        context.contentResolver.delete(uri, null, null)
-                    } catch (_: Exception) {}
-                }
-            }
+            createdDocUri?.let { deleteSafDocumentQuietly(context, it) }
             null
         }
     }
 
-    private fun copyToMediaStoreDownloads(context: Context, source: File): Uri? {
+    private fun copyToMediaStoreDownloads(
+        context: Context,
+        taskId: String,
+        source: File,
+        checkCanceled: () -> Boolean
+    ): Uri? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val resolver = context.contentResolver
         var pendingUri: Uri? = null
         return try {
+            if (checkCanceled()) {
+                throw CancellationException("Download canceled before MediaStore export")
+            }
             val mimeType = resolveMimeType(source)
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, source.name)
@@ -547,33 +740,48 @@ object DownloadFileManager {
                 ?: throw IOException("Unable to open MediaStore output stream for $itemUri")
             val copiedBytes = stream.use { output ->
                 FileInputStream(source).use { input ->
-                    val copied = input.copyTo(output)
-                    output.flush()
-                    copied
+                    copyStreamWithCancellation(input, output, checkCanceled)
                 }
             }
             if (copiedBytes != expectedBytes) {
                 throw IOException("Incomplete MediaStore copy: expected $expectedBytes, copied $copiedBytes")
             }
 
-            values.clear()
-            values.put(MediaStore.Downloads.IS_PENDING, 0)
-            val updatedRows = resolver.update(itemUri, values, null, null)
-            if (updatedRows <= 0) {
-                throw IOException("MediaStore failed to publish item: $itemUri")
+            synchronized(getTaskLock(taskId)) {
+                if (checkCanceled()) {
+                    throw CancellationException("Download canceled before MediaStore publish")
+                }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                val updatedRows = resolver.update(itemUri, values, null, null)
+                if (updatedRows <= 0) {
+                    throw IOException("MediaStore failed to publish item: $itemUri")
+                }
+                source.delete()
             }
-
-            source.delete()
             itemUri
+        } catch (ce: CancellationException) {
+            pendingUri?.let { deleteMediaStoreItemQuietly(context, it) }
+            throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Failed to export file to MediaStore.Downloads", e)
-            pendingUri?.let { uri ->
-                try {
-                    resolver.delete(uri, null, null)
-                } catch (_: Exception) {}
-            }
+            pendingUri?.let { deleteMediaStoreItemQuietly(context, it) }
             null
         }
+    }
+
+    private fun deleteSafDocumentQuietly(context: Context, uri: Uri) {
+        try {
+            if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) {
+                context.contentResolver.delete(uri, null, null)
+            }
+        } catch (_: Exception) {
+            runCatching { context.contentResolver.delete(uri, null, null) }
+        }
+    }
+
+    private fun deleteMediaStoreItemQuietly(context: Context, uri: Uri) {
+        runCatching { context.contentResolver.delete(uri, null, null) }
     }
 
     private fun resolveMimeType(file: File): String {

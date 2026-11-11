@@ -1,11 +1,16 @@
 package com.example.swiftgrab.util
 
+import com.example.swiftgrab.data.prefs.UserPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.net.URI
+import java.net.URLDecoder
 
 class StorageHelperTest {
 
@@ -30,17 +35,26 @@ class StorageHelperTest {
     }
 
     @Test
-    fun `resolvePathFromDocumentId handles percent-encoded characters`() {
-        val primaryRoot = tempFolder.newFolder("emulated_0_percent")
+    fun `resolvePathFromDocumentId preserves already decoded docId including literal percent sequences`() {
+        val primaryRoot = tempFolder.newFolder("emulated_0_literal")
 
-        val pathWithEncodedSlash = StorageHelper.resolvePathFromDocumentId(
-            docId = "primary:Download%2FSwiftGrab%20Folder",
+        // Model picker URI returned by OpenDocumentTree:
+        // content://com.android.externalstorage.documents/tree/primary%3ADownload%2F100%252Ftest
+        // DocumentsContract.getTreeDocumentId() decodes the path segment once into "primary:Download/100%2Ftest"
+        val pickerRawSegment = URI(
+            "content://com.android.externalstorage.documents/tree/primary%3ADownload%2F100%252Ftest"
+        ).rawPath.substringAfterLast('/')
+        val docIdFromDocumentsContract = URLDecoder.decode(pickerRawSegment.replace("+", "%2B"), Charsets.UTF_8.name())
+        assertEquals("primary:Download/100%2Ftest", docIdFromDocumentsContract)
+
+        val resolvedLiteralFolder = StorageHelper.resolvePathFromDocumentId(
+            docId = docIdFromDocumentsContract,
             primaryStorageRoot = primaryRoot
         )
-        assertEquals(File(primaryRoot, "Download/SwiftGrab Folder").absolutePath, pathWithEncodedSlash)
+        assertEquals(File(primaryRoot, "Download/100%2Ftest").absolutePath, resolvedLiteralFolder)
 
         val pathWithPlus = StorageHelper.resolvePathFromDocumentId(
-            docId = "primary:Music%2FRock+Metal",
+            docId = "primary:Music/Rock+Metal",
             primaryStorageRoot = primaryRoot
         )
         assertEquals(File(primaryRoot, "Music/Rock+Metal").absolutePath, pathWithPlus)
@@ -72,9 +86,54 @@ class StorageHelperTest {
     }
 
     @Test
-    fun `decodePercent decodes correctly while preserving plus characters`() {
-        assertEquals("Hello World", StorageHelper.decodePercent("Hello%20World"))
-        assertEquals("A+B/C", StorageHelper.decodePercent("A+B%2FC"))
-        assertEquals("SwiftGrab/1080p", StorageHelper.decodePercent("SwiftGrab%2F1080p"))
+    fun `isExternalStorageAuthority allows only external storage provider`() {
+        assertTrue(StorageHelper.isExternalStorageAuthority(StorageHelper.EXTERNAL_STORAGE_AUTHORITY))
+        assertFalse(StorageHelper.isExternalStorageAuthority("com.google.android.apps.docs.storage"))
+        assertFalse(StorageHelper.isExternalStorageAuthority("com.android.providers.downloads.documents"))
+        assertFalse(StorageHelper.isExternalStorageAuthority(null))
+    }
+
+    @Test
+    fun `needsLegacyWritePermissionForApi enforces runtime check only below API 29 without SAF`() {
+        assertTrue(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = false,
+                hasWritePermission = false
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = false,
+                hasWritePermission = true
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = true,
+                hasWritePermission = false
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 29,
+                hasCustomSafUri = false,
+                hasWritePermission = false
+            )
+        )
+    }
+
+    @Test
+    fun `shouldReleasePreviousUri skips unchanged or absent grants and releases replaced or cleared grants`() {
+        val uriA = "content://com.android.externalstorage.documents/tree/primary%3ADownload"
+        val uriB = "content://com.android.externalstorage.documents/tree/primary%3AMovies"
+
+        assertFalse(UserPreferences.shouldReleasePreviousUri(null, uriA))
+        assertFalse(UserPreferences.shouldReleasePreviousUri("", uriA))
+        assertFalse(UserPreferences.shouldReleasePreviousUri(uriA, uriA))
+        assertTrue(UserPreferences.shouldReleasePreviousUri(uriA, uriB))
+        assertTrue(UserPreferences.shouldReleasePreviousUri(uriA, null))
     }
 }

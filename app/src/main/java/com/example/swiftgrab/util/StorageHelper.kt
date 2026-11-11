@@ -12,7 +12,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import java.io.File
-import java.net.URLDecoder
 
 /**
  * Utilitas untuk mengelola akses folder penyimpanan, resolusi URI Storage Access Framework (SAF),
@@ -130,6 +129,7 @@ object StorageHelper {
         treeUri: Uri,
         preferences: com.example.swiftgrab.data.prefs.UserPreferences
     ): String? {
+        val previousUri = preferences.getCustomDownloadUri()
         if (!takePersistablePermission(context, treeUri)) {
             return null
         }
@@ -137,12 +137,24 @@ object StorageHelper {
         if (path != null) {
             val target = File(path)
             if (target.exists() || target.mkdirs()) {
-                preferences.setCustomDownloadLocation(target.absolutePath, treeUri.toString())
+                val saved = preferences.setCustomDownloadLocation(target.absolutePath, treeUri.toString())
+                if (!saved) {
+                    if (treeUri.toString() != previousUri) {
+                        releasePersistablePermission(context, treeUri.toString())
+                    }
+                    return null
+                }
                 return target.absolutePath
             }
         }
         val displayLabel = getDisplayLabelFromTreeUri(treeUri)
-        preferences.setCustomDownloadLocation(null, treeUri.toString())
+        val saved = preferences.setCustomDownloadLocation(null, treeUri.toString())
+        if (!saved) {
+            if (treeUri.toString() != previousUri) {
+                releasePersistablePermission(context, treeUri.toString())
+            }
+            return null
+        }
         return displayLabel
     }
 
@@ -191,24 +203,22 @@ object StorageHelper {
     }
 
     /**
-     * Resolusi murni tanpa dependensi Android framework terhadap docId SAF ke path berkas.
-     * Dapat diuji secara deterministik pada unit test.
+     * Resolusi murni tanpa dependensi Android framework terhadap docId SAF yang sudah didekodekan
+     * oleh [DocumentsContract] ke path berkas fisik tanpa mendekode ulang karakter literal seperti `%2F`.
      */
     fun resolvePathFromDocumentId(
         docId: String,
         primaryStorageRoot: File,
         externalStorageDirs: List<File> = emptyList()
     ): String? {
-        val decoded = decodePercent(docId)
-
-        if (decoded.startsWith("primary:", ignoreCase = true)) {
-            val relative = decoded.substringAfter("primary:").trimStart('/')
+        if (docId.startsWith("primary:", ignoreCase = true)) {
+            val relative = docId.substringAfter("primary:").trimStart('/')
             val target = if (relative.isNotEmpty()) File(primaryStorageRoot, relative) else primaryStorageRoot
             return target.absolutePath
         }
 
-        if (decoded.contains(":")) {
-            val parts = decoded.split(":", limit = 2)
+        if (docId.contains(":")) {
+            val parts = docId.split(":", limit = 2)
             val volumeId = parts[0]
             val relative = parts.getOrNull(1)?.trimStart('/') ?: ""
 
@@ -230,8 +240,8 @@ object StorageHelper {
             }
         }
 
-        if (decoded.startsWith("/")) {
-            return File(decoded).absolutePath
+        if (docId.startsWith("/")) {
+            return File(docId).absolutePath
         }
 
         return null
@@ -247,30 +257,18 @@ object StorageHelper {
             treeUri.lastPathSegment
         } ?: treeUri.toString()
 
-        val decoded = decodePercent(docId)
         return when {
-            decoded.startsWith("primary:", ignoreCase = true) -> {
-                val rel = decoded.substringAfter("primary:").trimStart('/')
+            docId.startsWith("primary:", ignoreCase = true) -> {
+                val rel = docId.substringAfter("primary:").trimStart('/')
                 if (rel.isEmpty()) "Penyimpanan Utama" else "Penyimpanan Utama / $rel"
             }
-            decoded.contains(":") -> {
-                val parts = decoded.split(":", limit = 2)
+            docId.contains(":") -> {
+                val parts = docId.split(":", limit = 2)
                 val vol = parts[0]
                 val rel = parts.getOrNull(1)?.trimStart('/') ?: ""
                 if (rel.isEmpty()) "Kartu SD ($vol)" else "Kartu SD ($vol) / $rel"
             }
-            else -> decoded
-        }
-    }
-
-    /**
-     * Mendekode karakter persen (seperti %2F untuk '/') dengan tetap mempertahankan tanda '+'.
-     */
-    internal fun decodePercent(input: String): String {
-        return try {
-            URLDecoder.decode(input.replace("+", "%2B"), Charsets.UTF_8.name())
-        } catch (_: Exception) {
-            input
+            else -> docId
         }
     }
 }

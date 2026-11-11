@@ -77,21 +77,23 @@ class UserPreferences(context: Context) {
     fun getCustomDownloadUri(): String? =
         prefs.getString(KEY_CUSTOM_DOWNLOAD_URI, null)
 
-    fun setCustomDownloadUri(uri: String?) {
+    fun setCustomDownloadUri(uri: String?): Boolean {
         val previousUri = getCustomDownloadUri()
         val cleanUri = uri?.takeIf { it.isNotBlank() }
         val editor = prefs.edit()
         if (cleanUri == null) editor.remove(KEY_CUSTOM_DOWNLOAD_URI)
         else editor.putString(KEY_CUSTOM_DOWNLOAD_URI, cleanUri)
-        if (editor.commit()) {
+        val committed = editor.commit()
+        if (committed) {
             _settings.update { it.copy(customDownloadUri = cleanUri) }
-            if (!previousUri.isNullOrBlank() && previousUri != cleanUri) {
+            if (shouldReleasePreviousUri(previousUri, cleanUri)) {
                 StorageHelper.releasePersistablePermission(appContext, previousUri)
             }
         }
+        return committed
     }
 
-    fun setCustomDownloadLocation(path: String?, uri: String?) {
+    fun setCustomDownloadLocation(path: String?, uri: String?): Boolean {
         val previousUri = getCustomDownloadUri()
         val cleanPath = path?.takeIf { it.isNotBlank() }
         val cleanUri = uri?.takeIf { it.isNotBlank() }
@@ -102,25 +104,27 @@ class UserPreferences(context: Context) {
         if (cleanUri == null) editor.remove(KEY_CUSTOM_DOWNLOAD_URI)
         else editor.putString(KEY_CUSTOM_DOWNLOAD_URI, cleanUri)
 
-        if (editor.commit()) {
+        val committed = editor.commit()
+        if (committed) {
             _settings.update {
                 it.copy(
                     customDownloadPath = cleanPath,
                     customDownloadUri = cleanUri
                 )
             }
-            if (!previousUri.isNullOrBlank() && previousUri != cleanUri) {
+            if (shouldReleasePreviousUri(previousUri, cleanUri)) {
                 StorageHelper.releasePersistablePermission(appContext, previousUri)
             }
         }
+        return committed
     }
 
-    fun clearCustomDownloadDir() {
+    fun clearCustomDownloadDir(): Boolean {
         val previousUri = getCustomDownloadUri()
-        val cleared = prefs.edit()
-            .remove(KEY_CUSTOM_DOWNLOAD_PATH)
-            .remove(KEY_CUSTOM_DOWNLOAD_URI)
-            .commit()
+        val editor = prefs.edit()
+        editor.remove(KEY_CUSTOM_DOWNLOAD_PATH)
+        editor.remove(KEY_CUSTOM_DOWNLOAD_URI)
+        val cleared = editor.commit()
         if (cleared) {
             _settings.update {
                 it.copy(
@@ -128,9 +132,32 @@ class UserPreferences(context: Context) {
                     customDownloadUri = null
                 )
             }
-            if (!previousUri.isNullOrBlank()) {
+            if (shouldReleasePreviousUri(previousUri, null)) {
                 StorageHelper.releasePersistablePermission(appContext, previousUri)
             }
+        }
+        return cleared
+    }
+
+    @android.annotation.SuppressLint("UseKtx")
+    fun saveActiveApkDownload(downloadId: Long, releaseTag: String): Boolean {
+        if (downloadId <= 0L || releaseTag.isBlank()) return false
+        val editor = prefs.edit()
+        editor.putLong(KEY_ACTIVE_APK_DOWNLOAD_ID, downloadId)
+        editor.putString(KEY_ACTIVE_APK_RELEASE_TAG, releaseTag)
+        return editor.commit()
+    }
+
+    fun getActiveApkDownload(): Pair<Long, String>? {
+        val id = prefs.getLong(KEY_ACTIVE_APK_DOWNLOAD_ID, -1L)
+        val tag = prefs.getString(KEY_ACTIVE_APK_RELEASE_TAG, null)
+        return if (id > 0L && !tag.isNullOrBlank()) id to tag else null
+    }
+
+    fun clearActiveApkDownload() {
+        prefs.edit {
+            remove(KEY_ACTIVE_APK_DOWNLOAD_ID)
+            remove(KEY_ACTIVE_APK_RELEASE_TAG)
         }
     }
 
@@ -152,5 +179,11 @@ class UserPreferences(context: Context) {
         private const val KEY_LAST_CLIPBOARD_URL = "last_clipboard_url"
         private const val KEY_CUSTOM_DOWNLOAD_PATH = "custom_download_path"
         private const val KEY_CUSTOM_DOWNLOAD_URI = "custom_download_uri"
+        private const val KEY_ACTIVE_APK_DOWNLOAD_ID = "active_apk_download_id"
+        private const val KEY_ACTIVE_APK_RELEASE_TAG = "active_apk_release_tag"
+
+        internal fun shouldReleasePreviousUri(previousUri: String?, newUri: String?): Boolean {
+            return !previousUri.isNullOrBlank() && previousUri != newUri
+        }
     }
 }

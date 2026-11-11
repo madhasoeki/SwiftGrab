@@ -7,10 +7,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.net.InetSocketAddress
 
 class AppUpdateManagerTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     @Test
     fun `compareSemVer and isNewerVersion handle standard and prefixed versions`() {
@@ -167,5 +173,75 @@ class AppUpdateManagerTest {
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun `selectBestApkAsset matches gradle release split names and refuses incompatible ABIs`() {
+        val gradleSplits = listOf(
+            ReleaseAsset("app-armeabi-v7a-release.apk", "https://example.com/v7a.apk"),
+            ReleaseAsset("app-arm64-v8a-release.apk", "https://example.com/arm64.apk"),
+            ReleaseAsset("app-x86_64-release.apk", "https://example.com/x86_64.apk")
+        )
+
+        val pickedArm64 = AppUpdateManager.selectBestApkAsset(gradleSplits, arrayOf("arm64-v8a", "armeabi-v7a"))
+        assertEquals("app-arm64-v8a-release.apk", pickedArm64?.name)
+
+        // Ensure x86 does NOT falsely match x86_64
+        val x86OnlyDevice = AppUpdateManager.selectBestApkAsset(
+            listOf(ReleaseAsset("app-x86_64-release.apk", "https://example.com/x86_64.apk")),
+            arrayOf("x86")
+        )
+        assertNull(x86OnlyDevice)
+
+        // Incompatible ABI-only assets must return null when no universal/generic APK exists
+        val incompatibleResult = AppUpdateManager.selectBestApkAsset(
+            listOf(ReleaseAsset("app-x86_64-release.apk", "https://example.com/x86_64.apk")),
+            arrayOf("arm64-v8a", "armeabi-v7a")
+        )
+        assertNull(incompatibleResult)
+    }
+
+    @Test
+    fun `resolveUniqueApkFileName chooses unique destination without deleting existing file`() {
+        val downloadsDir = tempFolder.newFolder("downloads")
+        val firstName = AppUpdateManager.resolveUniqueApkFileName(downloadsDir, "SwiftGrab-v0.0.3.apk")
+        assertEquals("SwiftGrab-v0.0.3.apk", firstName)
+
+        val existing = File(downloadsDir, "SwiftGrab-v0.0.3.apk").apply { writeText("old-apk") }
+        val secondName = AppUpdateManager.resolveUniqueApkFileName(downloadsDir, "SwiftGrab-v0.0.3.apk")
+        assertEquals("SwiftGrab-v0.0.3_1.apk", secondName)
+        assertTrue(existing.exists())
+        assertEquals("old-apk", existing.readText())
+
+        File(downloadsDir, "SwiftGrab-v0.0.3_1.apk").writeText("second-apk")
+        val thirdName = AppUpdateManager.resolveUniqueApkFileName(downloadsDir, "SwiftGrab-v0.0.3.apk")
+        assertEquals("SwiftGrab-v0.0.3_2.apk", thirdName)
+    }
+
+    @Test
+    fun `ApkDownloadState matchesRelease binds install state to release tag`() {
+        val releaseV3 = AppUpdateInfo(
+            versionName = "0.0.3",
+            tagName = "v0.0.3",
+            changelog = "v3",
+            htmlUrl = "https://github.com/madhasoeki/SwiftGrab/releases/tag/v0.0.3",
+            apkDownloadUrl = "https://example.com/v3.apk",
+            apkFileName = "v3.apk"
+        )
+        val releaseV4 = releaseV3.copy(versionName = "0.0.4", tagName = "v0.0.4")
+
+        val downloadingV3 = ApkDownloadState.Downloading(
+            downloadId = 10L,
+            releaseTag = "v0.0.3",
+            progress = 0.5f,
+            downloadedBytes = 100L,
+            totalBytes = 200L
+        )
+        assertTrue(downloadingV3.matchesRelease(releaseV3))
+        assertFalse(downloadingV3.matchesRelease(releaseV4))
+
+        val failedV3 = ApkDownloadState.Failed(releaseTag = "v0.0.3", message = "err")
+        assertTrue(failedV3.matchesRelease(releaseV3))
+        assertFalse(failedV3.matchesRelease(releaseV4))
     }
 }

@@ -28,7 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -143,6 +146,7 @@ class DownloadForegroundService : Service() {
     private fun startDownloadJob(task: DownloadTaskEntity) {
         pausedTaskIds.remove(task.id)
         canceledTaskIds.remove(task.id)
+        DownloadFileManager.clearTaskCanceled(task.id)
 
         val job = serviceScope.launch {
             executeDownload(task)
@@ -252,8 +256,17 @@ class DownloadForegroundService : Service() {
             }
 
             // Download completed successfully
-            val completed = DownloadFileManager.finalizeCompletedMedia(this, taskId)
-                ?: throw java.io.IOException("Berkas unduhan selesai tidak ditemukan di direktori staging")
+            val completed = DownloadFileManager.finalizeCompletedMedia(
+                context = this,
+                taskId = taskId,
+                isCanceled = { canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId) }
+            ) ?: throw java.io.IOException("Berkas unduhan selesai tidak ditemukan di direktori staging")
+
+            if (canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId) || !currentCoroutineContext().isActive) {
+                DownloadFileManager.rollbackExportedDownload(this, completed)
+                throw CancellationException("Download canceled after export")
+            }
+
             val finalPath = completed.outputPath
             val finalSize = completed.fileSize.takeIf { it > 0L } ?: latestTotalBytes
             val completedFile = completed.file
@@ -267,6 +280,12 @@ class DownloadForegroundService : Service() {
                 }
             }
 
+            repository.markCompleted(taskId, finalPath, finalSize)
+            if (canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId)) {
+                DownloadFileManager.rollbackExportedDownload(this, completed)
+                throw CancellationException("Download canceled during completion persistence")
+            }
+
             // Pemindaian MediaScannerConnection dipanggil untuk berkas dengan path fisik lokal
             // agar video/audio langsung otomatis muncul di Galeri HP dan aplikasi Pemutar Musik/Video.
             // Untuk ekspor SAF dokumen non-lokal (content://), pengindeksan bergantung pada penyedia dokumen SAF terkait.
@@ -276,7 +295,6 @@ class DownloadForegroundService : Service() {
                 DownloadFileManager.scanMediaPath(this, finalPath)
             }
 
-            repository.markCompleted(taskId, finalPath, finalSize)
             showCompletedNotification(taskId, latestTitle, finalPath, finalSize)
             Log.i(TAG, "Download completed for task: $taskId -> $finalPath")
         } catch (t: Throwable) {
@@ -352,6 +370,7 @@ class DownloadForegroundService : Service() {
     fun resumeTask(taskId: String) {
         pausedTaskIds.remove(taskId)
         canceledTaskIds.remove(taskId)
+        DownloadFileManager.clearTaskCanceled(taskId)
 
         serviceScope.launch {
             repository.updateStatus(taskId, DownloadStatus.QUEUED)
@@ -365,6 +384,7 @@ class DownloadForegroundService : Service() {
     fun cancelTask(taskId: String) {
         canceledTaskIds.add(taskId)
         pausedTaskIds.remove(taskId)
+        DownloadFileManager.markTaskCanceled(taskId)
 
         serviceScope.launch(Dispatchers.IO) {
             try {
@@ -374,7 +394,9 @@ class DownloadForegroundService : Service() {
                 Log.e(TAG, "Error destroying process on cancel: $taskId", e)
             }
             val job = activeJobs.remove(taskId)
-            job?.cancel()
+            try {
+                job?.cancelAndJoin()
+            } catch (_: CancellationException) {}
 
             DownloadFileManager.cleanupTemporaryFiles(this@DownloadForegroundService, taskId)
             repository.updateStatus(taskId, DownloadStatus.CANCELED)

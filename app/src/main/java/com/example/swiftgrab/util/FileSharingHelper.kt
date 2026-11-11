@@ -9,8 +9,12 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
 object FileSharingHelper {
+
+    private const val SHARED_MEDIA_DIR = "shared_media"
 
     fun openFile(context: Context, filePath: String) {
         if (filePath.startsWith("content://")) {
@@ -37,10 +41,8 @@ object FileSharingHelper {
             return
         }
 
-        val uri: Uri = try {
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Gagal membuka berkas: ${e.message}", Toast.LENGTH_SHORT).show()
+        val uri: Uri = resolveShareableUri(context, file) ?: run {
+            Toast.makeText(context, "Gagal membuka berkas", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -84,10 +86,8 @@ object FileSharingHelper {
             return
         }
 
-        val uri: Uri = try {
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Gagal membagikan berkas: ${e.message}", Toast.LENGTH_SHORT).show()
+        val uri: Uri = resolveShareableUri(context, file) ?: run {
+            Toast.makeText(context, "Gagal membagikan berkas", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -106,6 +106,38 @@ object FileSharingHelper {
             context.startActivity(chooser)
         } catch (e: Exception) {
             Toast.makeText(context, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Menghasilkan URI [FileProvider] apabila [file] berada di dalam root yang dikonfigurasi
+     * (`Download/` atau penyimpanan aplikasi), atau membuat salinan sementara khusus berbagi di
+     * `cache/shared_media/` untuk berkas dari folder kustom di luar cakupan FileProvider.
+     */
+    private fun resolveShareableUri(context: Context, file: File): Uri? {
+        return try {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (_: IllegalArgumentException) {
+            try {
+                val shareCacheDir = File(context.cacheDir, SHARED_MEDIA_DIR).apply {
+                    if (exists()) {
+                        listFiles()?.forEach { it.delete() }
+                    } else {
+                        mkdirs()
+                    }
+                }
+                val cacheCopy = File(shareCacheDir, file.name)
+                FileInputStream(file).use { input ->
+                    FileOutputStream(cacheCopy).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheCopy)
+            } catch (_: Exception) {
+                null
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
