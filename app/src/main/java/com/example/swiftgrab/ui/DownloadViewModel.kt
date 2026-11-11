@@ -209,6 +209,11 @@ class DownloadViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 Log.d("DownloadViewModel", "Starting yt-dlp binary update check...")
+                val engineResult = app.awaitEngineReady()
+                if (engineResult.isFailure) {
+                    val cause = engineResult.exceptionOrNull()
+                    throw cause ?: IllegalStateException("Engine init failed")
+                }
                 val context: Context = getApplication()
                 val status = YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE)
                 val currentVersion = YoutubeDL.getInstance().versionName(context) ?: "terbaru"

@@ -177,7 +177,13 @@ class DownloadForegroundService : Service() {
             val app = application as SwiftGrabApp
             val engineResult = app.awaitEngineReady()
             if (engineResult.isFailure) {
-                val err = engineResult.exceptionOrNull()?.message ?: "Engine init failed"
+                val error = engineResult.exceptionOrNull()
+                val rootCause = generateSequence(error) { it.cause }.lastOrNull()
+                val details = listOfNotNull(
+                    error?.message,
+                    rootCause?.takeIf { it != error }?.let { "${it.javaClass.simpleName}: ${it.message}" }
+                ).filter { it.isNotBlank() }.joinToString(" -> ")
+                val err = details.ifBlank { error?.javaClass?.simpleName ?: "Engine init failed" }
                 throw IllegalStateException("Download engine failed to initialize: $err")
             }
 
@@ -257,8 +263,8 @@ class DownloadForegroundService : Service() {
             repository.markCompleted(taskId, finalPath, finalSize)
             showCompletedNotification(taskId, latestTitle, finalPath, finalSize)
             Log.i(TAG, "Download completed for task: $taskId -> $finalPath")
-        } catch (e: Exception) {
-            handleDownloadError(task, e, latestProgress, latestDownloadedBytes, latestTotalBytes)
+        } catch (t: Throwable) {
+            handleDownloadError(task, t, latestProgress, latestDownloadedBytes, latestTotalBytes)
         } finally {
             activeJobs.remove(taskId)
             throttlers.remove(taskId)
@@ -268,7 +274,7 @@ class DownloadForegroundService : Service() {
 
     private suspend fun handleDownloadError(
         task: DownloadTaskEntity,
-        e: Exception,
+        t: Throwable,
         lastProgress: Float,
         lastDownloadedBytes: Long,
         lastTotalBytes: Long
@@ -286,14 +292,14 @@ class DownloadForegroundService : Service() {
                 repository.updateStatus(taskId, DownloadStatus.CANCELED)
                 notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
             }
-            e is CancellationException -> {
+            t is CancellationException -> {
                 Log.d(TAG, "Task $taskId coroutine was canceled")
                 repository.updateStatus(taskId, DownloadStatus.PAUSED)
                 updatePausedNotification(taskId, task.title, lastProgress)
             }
             else -> {
-                Log.e(TAG, "Task $taskId failed with exception: ${e.message}", e)
-                val errorMessage = e.message ?: "Download failed"
+                Log.e(TAG, "Task $taskId failed with exception: ${t.message}", t)
+                val errorMessage = t.message ?: "Download failed"
                 repository.updateStatus(taskId, DownloadStatus.FAILED, errorMessage = errorMessage)
                 showFailedNotification(taskId, task.title, errorMessage)
             }

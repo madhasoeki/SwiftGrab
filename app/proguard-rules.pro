@@ -1,13 +1,18 @@
 # Proguard rules for SwiftGrab
 
-# Keep youtubedl-android, ffmpeg, and aria2c JNI and core classes
--keep class com.yausername.youtubedl_android.** { *; }
--keep class com.yausername.youtubedl_common.** { *; }
--keep class com.yausername.ffmpeg.** { *; }
--keep class com.yausername.aria2c.** { *; }
+# Turn off obfuscation to protect youtubedl-android, yt-dlp metadata serialization, JNI, and process execution
+-dontobfuscate
 
-# Keep Apache Commons IO and Jackson JSON deserialization for yt-dlp metadata
+# Keep youtubedl-android, ffmpeg, aria2c, and common classes
+-keep class com.yausername.** { *; }
+
+# Keep Apache Commons Compress and IO for native binary zip extraction
+-keep class org.apache.commons.compress.** { *; }
 -keep class org.apache.commons.io.** { *; }
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.apache.commons.io.**
+
+# Keep Jackson JSON deserialization for yt-dlp metadata
 -keep class com.fasterxml.jackson.** { *; }
 -dontwarn java.beans.**
 -dontwarn javax.xml.**

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 class SwiftGrabApp : Application() {
@@ -32,7 +33,10 @@ class SwiftGrabApp : Application() {
     private val _isEngineReady = MutableStateFlow(false)
     val isEngineReady: StateFlow<Boolean> = _isEngineReady.asStateFlow()
 
-    private val engineInitDeferred = CompletableDeferred<Result<Unit>>()
+    @Volatile
+    private var engineInitDeferred = CompletableDeferred<Result<Unit>>()
+    @Volatile
+    private var engineInitFailed = false
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -40,10 +44,27 @@ class SwiftGrabApp : Application() {
         instance = this
 
         createNotificationChannels()
-        initDownloadEnginesAsync()
+        initDownloadEnginesAsync(engineInitDeferred)
     }
 
-    suspend fun awaitEngineReady(): Result<Unit> = engineInitDeferred.await()
+    suspend fun awaitEngineReady(): Result<Unit> {
+        val result = engineInitDeferred.await()
+        if (result.isFailure) {
+            return retryEngineInit().await()
+        }
+        return result
+    }
+
+    @Synchronized
+    fun retryEngineInit(): CompletableDeferred<Result<Unit>> {
+        if (engineInitFailed && engineInitDeferred.isCompleted) {
+            engineInitFailed = false
+            val newDeferred = CompletableDeferred<Result<Unit>>()
+            engineInitDeferred = newDeferred
+            initDownloadEnginesAsync(newDeferred)
+        }
+        return engineInitDeferred
+    }
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -72,26 +93,32 @@ class SwiftGrabApp : Application() {
         }
     }
 
-    private fun initDownloadEnginesAsync() {
+    private fun initDownloadEnginesAsync(deferred: CompletableDeferred<Result<Unit>>) {
         appScope.launch {
             try {
                 Log.d(TAG, "Initializing YoutubeDL, FFmpeg, and Aria2c on Dispatchers.IO...")
                 val startTime = System.currentTimeMillis()
+
+                val nativeDir = File(applicationInfo.nativeLibraryDir)
+                Log.d(TAG, "nativeLibraryDir: ${nativeDir.absolutePath}, exists: ${nativeDir.exists()}")
 
                 YoutubeDL.getInstance().init(this@SwiftGrabApp)
                 FFmpeg.getInstance().init(this@SwiftGrabApp)
                 Aria2c.getInstance().init(this@SwiftGrabApp)
 
                 val elapsed = System.currentTimeMillis() - startTime
+                engineInitFailed = false
                 _isEngineReady.value = true
-                engineInitDeferred.complete(Result.success(Unit))
+                deferred.complete(Result.success(Unit))
                 Log.i(TAG, "Download engines successfully initialized in ${elapsed}ms")
             } catch (e: CancellationException) {
-                engineInitDeferred.complete(Result.failure(e))
+                engineInitFailed = true
+                deferred.complete(Result.failure(e))
                 throw e
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to initialize YoutubeDL/FFmpeg/Aria2c native engines", t)
-                engineInitDeferred.complete(Result.failure(t))
+                engineInitFailed = true
+                deferred.complete(Result.failure(t))
             }
         }
     }
