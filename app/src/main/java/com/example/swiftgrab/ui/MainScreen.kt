@@ -1,9 +1,12 @@
 package com.example.swiftgrab.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -53,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,11 +94,63 @@ fun MainRoute(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingLegacyDownload by viewModel.pendingLegacyStorageDownload.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var isXLoginDialogOpen by rememberSaveable { mutableStateOf(false) }
     var isManualDialogOpen by rememberSaveable { mutableStateOf(false) }
     var selectedErrorTask by remember { mutableStateOf<DownloadTaskEntity?>(null) }
+
+    val legacySafPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val display = viewModel.setStorageDirFromUri(uri)
+            if (display != null) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_storage_dir_updated, display),
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.executePendingLegacyStorageDownload()
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_storage_dir_error),
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.clearPendingLegacyStorageDownload()
+            }
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_legacy_storage_denied),
+                Toast.LENGTH_SHORT
+            ).show()
+            viewModel.clearPendingLegacyStorageDownload()
+        }
+    }
+
+    val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.executePendingLegacyStorageDownload()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_legacy_storage_denied),
+                Toast.LENGTH_SHORT
+            ).show()
+            legacySafPickerLauncher.launch(null)
+        }
+    }
+
+    LaunchedEffect(pendingLegacyDownload) {
+        if (pendingLegacyDownload != null) {
+            legacyStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
 
     MainScreen(
         uiState = uiState,

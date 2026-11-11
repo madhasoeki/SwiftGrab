@@ -483,10 +483,10 @@ fun SettingsBottomSheet(
                         )
                     }
                     if (isCustomStorage) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
                             onClick = onResetStorageDir,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Restore,

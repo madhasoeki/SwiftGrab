@@ -8,6 +8,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class DownloadFileManagerTest {
 
@@ -94,10 +96,46 @@ class DownloadFileManagerTest {
         val conflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
         assertEquals("video_99999.mp4", conflicted.name)
 
+        // Simulate second conflict with same timestamp
+        File(targetDir, "video_99999.mp4").writeText("exists-2")
+        val doubleConflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video_99999_1.mp4", doubleConflicted.name)
+
         // Conflict without extension
         File(targetDir, "audiofile").writeText("audio")
         val conflictedNoExt = DownloadFileManager.buildUniqueTargetFile(targetDir, "audiofile", 88888L)
         assertEquals("audiofile_88888", conflictedNoExt.name)
+    }
+
+    @Test
+    fun `reserveUniqueTargetFile allocates distinct files atomically under concurrent exports`() {
+        val targetDir = tempFolder.newFolder("concurrent_target")
+        val threadCount = 8
+        val executor = Executors.newFixedThreadPool(threadCount)
+        try {
+            val tasks = (1..threadCount).map {
+                Callable {
+                    DownloadFileManager.reserveUniqueTargetFile(
+                        targetDir = targetDir,
+                        fileName = "same_video.mp4",
+                        timestampProvider = { 123456L }
+                    )
+                }
+            }
+            val reservedPaths = executor.invokeAll(tasks).map { it.get().absolutePath }.toSet()
+            assertEquals(threadCount, reservedPaths.size)
+            reservedPaths.forEach { path ->
+                assertTrue(File(path).exists())
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `safeStagingDir rejects path traversal taskId`() {
+        val baseDir = tempFolder.newFolder("staging_base")
+        DownloadFileManager.safeStagingDir(baseDir, "../escaped")
     }
 
     @Test

@@ -53,7 +53,8 @@
     <string name="settings_storage_dir_reset">Kembalikan ke folder default</string>
     <string name="toast_storage_dir_updated">Folder penyimpanan diubah: %s</string>
     <string name="toast_storage_dir_reset">Folder penyimpanan dikembalikan ke default</string>
-    <string name="toast_storage_dir_error">Gagal mengakses folder yang dipilih. Menggunakan folder default.</string>
+    <string name="toast_storage_dir_error">Gagal mempertahankan izin akses ke folder yang dipilih.</string>
+    <string name="toast_legacy_storage_denied">Izin penyimpanan ditolak. Pilih folder penyimpanan agar unduhan dapat disimpan.</string>
     <string name="settings_ytdlp_update">Pembaruan Ekstraktor (yt-dlp)</string>
     <string name="settings_ytdlp_version">Versi yt-dlp: %s</string>
     <string name="btn_check_ytdlp_update">Periksa Pembaruan yt-dlp</string>

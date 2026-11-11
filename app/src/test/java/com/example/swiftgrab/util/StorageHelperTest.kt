@@ -1,7 +1,10 @@
 package com.example.swiftgrab.util
 
+import com.example.swiftgrab.data.prefs.UserPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -76,5 +79,57 @@ class StorageHelperTest {
         assertEquals("Hello World", StorageHelper.decodePercent("Hello%20World"))
         assertEquals("A+B/C", StorageHelper.decodePercent("A+B%2FC"))
         assertEquals("SwiftGrab/1080p", StorageHelper.decodePercent("SwiftGrab%2F1080p"))
+    }
+
+    @Test
+    fun `isExternalStorageAuthority allows only external storage provider`() {
+        assertTrue(StorageHelper.isExternalStorageAuthority(StorageHelper.EXTERNAL_STORAGE_AUTHORITY))
+        assertFalse(StorageHelper.isExternalStorageAuthority("com.google.android.apps.docs.storage"))
+        assertFalse(StorageHelper.isExternalStorageAuthority("com.android.providers.downloads.documents"))
+        assertFalse(StorageHelper.isExternalStorageAuthority(null))
+    }
+
+    @Test
+    fun `needsLegacyWritePermissionForApi enforces runtime check only below API 29 without SAF`() {
+        assertTrue(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = false,
+                hasWritePermission = false
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = false,
+                hasWritePermission = true
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 28,
+                hasCustomSafUri = true,
+                hasWritePermission = false
+            )
+        )
+        assertFalse(
+            StorageHelper.needsLegacyWritePermissionForApi(
+                sdkInt = 29,
+                hasCustomSafUri = false,
+                hasWritePermission = false
+            )
+        )
+    }
+
+    @Test
+    fun `shouldReleasePreviousUri skips unchanged or absent grants and releases replaced or cleared grants`() {
+        val uriA = "content://com.android.externalstorage.documents/tree/primary%3ADownload"
+        val uriB = "content://com.android.externalstorage.documents/tree/primary%3AMovies"
+
+        assertFalse(UserPreferences.shouldReleasePreviousUri(null, uriA))
+        assertFalse(UserPreferences.shouldReleasePreviousUri("", uriA))
+        assertFalse(UserPreferences.shouldReleasePreviousUri(uriA, uriA))
+        assertTrue(UserPreferences.shouldReleasePreviousUri(uriA, uriB))
+        assertTrue(UserPreferences.shouldReleasePreviousUri(uriA, null))
     }
 }

@@ -21,9 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class TaskFilter(val title: String) {
@@ -31,6 +31,12 @@ enum class TaskFilter(val title: String) {
     ACTIVE("Aktif"),
     COMPLETED("Selesai"),
     FAILED("Gagal")
+}
+
+sealed interface PendingDownloadRequest {
+    data class Single(val url: String, val preset: DownloadPreset) : PendingDownloadRequest
+    data class Batch(val urls: List<String>, val preset: DownloadPreset) : PendingDownloadRequest
+    data class Retry(val task: DownloadTaskEntity) : PendingDownloadRequest
 }
 
 sealed interface YtDlpUpdateState {
@@ -63,6 +69,8 @@ class DownloadViewModel(
     private val _clipboardSuggestionUrl = MutableStateFlow<String?>(null)
     private val _ytdlUpdateStatus = MutableStateFlow<YtDlpUpdateState>(YtDlpUpdateState.Idle)
     private val _isXLoggedIn = MutableStateFlow(CookieStorageManager.hasValidXCookies(application))
+    private val _pendingLegacyStorageDownload = MutableStateFlow<PendingDownloadRequest?>(null)
+    val pendingLegacyStorageDownload: StateFlow<PendingDownloadRequest?> = _pendingLegacyStorageDownload.asStateFlow()
 
     private val tasksAndFilter = combine(repository.allTasks, _activeFilter) { tasks, filter ->
         val filtered = when (filter) {
@@ -134,6 +142,10 @@ class DownloadViewModel(
     }
 
     fun startDownload(url: String, preset: DownloadPreset) {
+        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+            _pendingLegacyStorageDownload.value = PendingDownloadRequest.Single(url, preset)
+            return
+        }
         preferences.setLastHandledClipboardUrl(url)
         _clipboardSuggestionUrl.value = null
         DownloadForegroundService.startDownload(
@@ -144,6 +156,10 @@ class DownloadViewModel(
     }
 
     fun startBatchDownloads(urls: List<String>, preset: DownloadPreset) {
+        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+            _pendingLegacyStorageDownload.value = PendingDownloadRequest.Batch(urls, preset)
+            return
+        }
         val context: Context = getApplication()
         for (url in urls) {
             DownloadForegroundService.startDownload(context, url.trim(), preset)
@@ -169,6 +185,10 @@ class DownloadViewModel(
     }
 
     fun retryTask(task: DownloadTaskEntity) {
+        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+            _pendingLegacyStorageDownload.value = PendingDownloadRequest.Retry(task)
+            return
+        }
         val preset = DownloadPreset.fromTask(task.formatLabel, task.audioOnly)
         DownloadForegroundService.startDownload(
             context = getApplication(),
@@ -176,6 +196,23 @@ class DownloadViewModel(
             preset = preset,
             taskId = task.id
         )
+    }
+
+    /**
+     * Melanjutkan permintaan unduhan tertunda setelah izin penyimpanan legacy atau folder SAF tersedia.
+     */
+    fun executePendingLegacyStorageDownload() {
+        val pending = _pendingLegacyStorageDownload.value ?: return
+        _pendingLegacyStorageDownload.value = null
+        when (pending) {
+            is PendingDownloadRequest.Single -> startDownload(pending.url, pending.preset)
+            is PendingDownloadRequest.Batch -> startBatchDownloads(pending.urls, pending.preset)
+            is PendingDownloadRequest.Retry -> retryTask(pending.task)
+        }
+    }
+
+    fun clearPendingLegacyStorageDownload() {
+        _pendingLegacyStorageDownload.value = null
     }
 
     fun clearCompletedTasks() {
@@ -209,19 +246,10 @@ class DownloadViewModel(
 
     /**
      * Mengatur folder unduhan kustom dari URI Storage Access Framework yang dipilih pengguna.
-     * Mengembalikan path fisik atau label tampilan folder jika berhasil disimpan.
+     * Mengembalikan path fisik atau label tampilan folder jika izin berhasil dipertahankan dan disimpan.
      */
     fun setStorageDirFromUri(uri: Uri): String? {
-        val context: Context = getApplication()
-        val path = StorageHelper.resolvePathAndPersist(context, uri)
-        if (path != null) {
-            preferences.setCustomDownloadLocation(path, uri.toString())
-            return path
-        }
-        StorageHelper.takePersistablePermission(context, uri)
-        val displayLabel = StorageHelper.getDisplayLabelFromTreeUri(uri)
-        preferences.setCustomDownloadLocation(null, uri.toString())
-        return displayLabel
+        return StorageHelper.saveCustomTreeUri(getApplication(), uri, preferences)
     }
 
     /**
