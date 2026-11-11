@@ -8,6 +8,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class DownloadFileManagerTest {
 
@@ -57,5 +59,99 @@ class DownloadFileManagerTest {
         assertEquals("video-content-complete", targetFile.readText())
         stagingDir.deleteRecursively()
         assertFalse(stagingDir.exists())
+    }
+
+    @Test
+    fun `resolveDownloadDir uses custom path when valid and falls back to default`() {
+        val defaultPublicDir = tempFolder.newFolder("PublicDownloads", "SwiftGrab")
+        val customFolder = tempFolder.newFolder("CustomFolder")
+
+        val resolvedCustom = DownloadFileManager.resolveDownloadDir(
+            customPath = customFolder.absolutePath,
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(customFolder.absolutePath, resolvedCustom.absolutePath)
+
+        val resolvedDefault = DownloadFileManager.resolveDownloadDir(
+            customPath = null,
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(defaultPublicDir.absolutePath, resolvedDefault.absolutePath)
+
+        val resolvedBlank = DownloadFileManager.resolveDownloadDir(
+            customPath = "   ",
+            defaultPublicDir = defaultPublicDir
+        )
+        assertEquals(defaultPublicDir.absolutePath, resolvedBlank.absolutePath)
+    }
+
+    @Test
+    fun `buildUniqueTargetFile preserves non-existing file name and appends timestamp on conflict`() {
+        val targetDir = tempFolder.newFolder("target_dir")
+        val newFile = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video.mp4", newFile.name)
+
+        // Simulate conflict
+        File(targetDir, "video.mp4").writeText("exists")
+        val conflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video_99999.mp4", conflicted.name)
+
+        // Simulate second conflict with same timestamp
+        File(targetDir, "video_99999.mp4").writeText("exists-2")
+        val doubleConflicted = DownloadFileManager.buildUniqueTargetFile(targetDir, "video.mp4", 99999L)
+        assertEquals("video_99999_1.mp4", doubleConflicted.name)
+
+        // Conflict without extension
+        File(targetDir, "audiofile").writeText("audio")
+        val conflictedNoExt = DownloadFileManager.buildUniqueTargetFile(targetDir, "audiofile", 88888L)
+        assertEquals("audiofile_88888", conflictedNoExt.name)
+    }
+
+    @Test
+    fun `reserveUniqueTargetFile allocates distinct files atomically under concurrent exports`() {
+        val targetDir = tempFolder.newFolder("concurrent_target")
+        val threadCount = 8
+        val executor = Executors.newFixedThreadPool(threadCount)
+        try {
+            val tasks = (1..threadCount).map {
+                Callable {
+                    DownloadFileManager.reserveUniqueTargetFile(
+                        targetDir = targetDir,
+                        fileName = "same_video.mp4",
+                        timestampProvider = { 123456L }
+                    )
+                }
+            }
+            val reservedPaths = executor.invokeAll(tasks).map { it.get().absolutePath }.toSet()
+            assertEquals(threadCount, reservedPaths.size)
+            reservedPaths.forEach { path ->
+                assertTrue(File(path).exists())
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `safeStagingDir rejects path traversal taskId`() {
+        val baseDir = tempFolder.newFolder("staging_base")
+        DownloadFileManager.safeStagingDir(baseDir, "../escaped")
+    }
+
+    @Test
+    fun `findCompletedMediaFile ignores intermediate download files`() {
+        val staging = tempFolder.newFolder("staging_test")
+        File(staging, "track.mp3.part").writeText("part")
+        File(staging, "track.mp3.aria2").writeText("aria2")
+        File(staging, "track.mp3.ytdl").writeText("ytdl")
+        File(staging, "track.mp3.temp").writeText("temp")
+
+        val foundBefore = DownloadFileManager.findCompletedMediaFile(staging)
+        assertEquals(null, foundBefore)
+
+        val completeMedia = File(staging, "track.mp3").apply { writeText("audio-data") }
+        val foundAfter = DownloadFileManager.findCompletedMediaFile(staging)
+        assertNotNull(foundAfter)
+        assertEquals(completeMedia.absolutePath, foundAfter?.absolutePath)
     }
 }

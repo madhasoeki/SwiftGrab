@@ -1,5 +1,6 @@
 package com.example.swiftgrab.ui
 
+import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,6 +20,7 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.service.DownloadForegroundService
 import com.example.swiftgrab.ui.components.QuickFormatSheet
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
+import com.example.swiftgrab.util.StorageHelper
 import com.example.swiftgrab.util.UrlValidator
 
 /**
@@ -32,6 +35,65 @@ class ShareInterceptActivity : ComponentActivity() {
     private var activeUrl by mutableStateOf<String?>(null)
     private var selectedPreset by mutableStateOf(DownloadPreset.BEST_VIDEO)
     private var contentInitialized = false
+
+    private var pendingLegacyUrl: String? = null
+    private var pendingLegacyPreset: DownloadPreset? = null
+
+    private val legacySafPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            val url = pendingLegacyUrl
+            val preset = pendingLegacyPreset ?: DownloadPreset.BEST_VIDEO
+            pendingLegacyUrl = null
+            pendingLegacyPreset = null
+
+            if (uri != null && url != null) {
+                val prefs = (application as SwiftGrabApp).userPreferences
+                val display = StorageHelper.saveCustomTreeUri(this, uri, prefs)
+                if (display != null) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.toast_storage_dir_updated, display),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    dispatchDownloadAndFinish(url, preset)
+                    return@registerForActivityResult
+                }
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_storage_dir_error),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_legacy_storage_denied),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            finish()
+        }
+
+    private val legacyStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            val url = pendingLegacyUrl
+            val preset = pendingLegacyPreset ?: DownloadPreset.BEST_VIDEO
+            if (url == null) {
+                finish()
+                return@registerForActivityResult
+            }
+            if (isGranted) {
+                pendingLegacyUrl = null
+                pendingLegacyPreset = null
+                dispatchDownloadAndFinish(url, preset)
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_legacy_storage_denied),
+                    Toast.LENGTH_SHORT
+                ).show()
+                legacySafPickerLauncher.launch(null)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -158,6 +220,18 @@ class ShareInterceptActivity : ComponentActivity() {
     }
 
     private fun startDownloadAndFinish(url: String, preset: DownloadPreset) {
+        val prefs = (application as SwiftGrabApp).userPreferences
+        if (StorageHelper.needsLegacyWritePermission(this, prefs.getCustomDownloadUri())) {
+            activeUrl = null
+            pendingLegacyUrl = url
+            pendingLegacyPreset = preset
+            legacyStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        dispatchDownloadAndFinish(url, preset)
+    }
+
+    private fun dispatchDownloadAndFinish(url: String, preset: DownloadPreset) {
         DownloadForegroundService.startDownload(
             context = this,
             url = url,
