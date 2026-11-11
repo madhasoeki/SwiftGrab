@@ -78,10 +78,25 @@ Jalankan perintah berikut sebelum melakukan commit:
 2. Tulis pesan commit yang jelas dan deskriptif (mengikuti konvensi *Conventional Commits* seperti `feat:`, `fix:`, `docs:`, `refactor:`, `build:`).
 3. Pastikan tidak ada berkas temporer (`local.properties`, `build/`, `*.jks`) yang terunggah.
 4. Buka *Pull Request* ke branch `main`.
-5. Pastikan semua *checks* di GitHub Actions CI lulus.
+5. Pastikan semua *checks* di GitHub Actions CI lulus (CI hanya menguji kode dan membangun APK Debug untuk verifikasi, **tidak** merilis APK ke publik).
+6. Setelah di-merge ke `main`, perubahan akan ditampung terlebih dahulu.
 
 ---
 
-## 7. Lisensi
+## 7. Alur Rilis Versi Baru (Release Workflow)
+
+SwiftGrab menganut prinsip rilis berkala terencana (*scheduled / batch releases*):
+1. **Akumulasi Perubahan:** Berbagai kontribusi dan perbaikan di-merge terlebih dahulu ke branch `main`.
+2. **Pembaruan Versi:** Ketika siap merilis versi baru, perbarui `versionCode` dan `versionName` di [`app/build.gradle.kts`](./app/build.gradle.kts).
+3. **Pemicu Rilis:** Publikasi ke [GitHub Releases](https://github.com/madhasoeki/SwiftGrab/releases) hanya dipicu dengan membuat Git Tag baru:
+   ```bash
+   git tag v0.0.1
+   git push origin v0.0.1
+   ```
+   *Atau jalankan workflow **Release APK** secara manual dari tab Actions di GitHub.*
+
+---
+
+## 8. Lisensi
 
 Dengan berkontribusi pada proyek ini, Anda menyetujui bahwa semua kontribusi kode Anda akan dilisensikan di bawah [GNU General Public License v3.0 (GPLv3)](./LICENSE).

@@ -86,7 +86,7 @@ SwiftGrab mengadopsi pola arsitektur **Clean Architecture + Unidirectional Data 
 
 ### 1. Unduh Langsung via GitHub Releases
 1. Buka halaman [Releases Terbaru](https://github.com/madhasoeki/SwiftGrab/releases/latest).
-2. Unduh berkas `SwiftGrab-v1.0.0.apk`.
+2. Unduh berkas `SwiftGrab-v0.0.1.apk` (atau versi rilis terbaru).
 3. Buka berkas APK di perangkat Android Anda dan izinkan instalasi dari sumber tidak dikenal jika diminta.
 
 ### 2. Pembaruan Otomatis via Obtainium (Direkomendasikan)
