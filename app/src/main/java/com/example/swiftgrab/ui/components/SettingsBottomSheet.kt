@@ -64,6 +64,10 @@ import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.service.DownloadFileManager
 import com.example.swiftgrab.ui.YtDlpUpdateState
 
+/**
+ * Lembar pengaturan aplikasi untuk mengonfigurasi preferensi unduhan, format default,
+ * clipboard auto-start, pembaruan yt-dlp, dan autentikasi akun X.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsBottomSheet(
@@ -159,7 +163,7 @@ fun SettingsBottomSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -232,7 +236,7 @@ fun SettingsBottomSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -308,7 +312,7 @@ fun SettingsBottomSheet(
                             }
                         ) {
                             Text(
-                                text = if (isXLoggedIn) "Aktif" else "Tamu (Guest)",
+                                text = if (isXLoggedIn) "Aktif" else "Tamu",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = if (isXLoggedIn) {
                                     MaterialTheme.colorScheme.onSecondaryContainer
@@ -319,18 +323,6 @@ fun SettingsBottomSheet(
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = if (isXLoggedIn) {
-                            stringResource(R.string.x_account_desc_logged_in)
-                        } else {
-                            stringResource(R.string.x_account_desc_not_logged_in)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -595,6 +587,9 @@ private fun SectionHeader(
     }
 }
 
+/**
+ * Kartu pilihan preset format bawaan di dalam lembar pengaturan.
+ */
 @Composable
 private fun PresetSelectCard(
     preset: DownloadPreset,
@@ -644,18 +639,12 @@ private fun PresetSelectCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = preset.displayTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = preset.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = preset.displayTitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
 
             RadioButton(
                 selected = isSelected,

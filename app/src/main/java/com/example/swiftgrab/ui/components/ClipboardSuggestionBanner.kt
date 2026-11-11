@@ -24,7 +24,6 @@ import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -38,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,6 +48,9 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import com.example.swiftgrab.util.UrlValidator
 
+/**
+ * Banner kartu saran unduhan ketika tautan URL baru terdeteksi pada papan klip.
+ */
 @Composable
 fun ClipboardSuggestionBanner(
     url: String?,
@@ -85,6 +89,8 @@ fun ClipboardSuggestionBanner(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        val clipboardBannerTitle = stringResource(R.string.clipboard_banner_title)
+
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -94,7 +100,7 @@ fun ClipboardSuggestionBanner(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.ContentPaste,
-                                contentDescription = null,
+                                contentDescription = clipboardBannerTitle,
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -102,30 +108,18 @@ fun ClipboardSuggestionBanner(
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.clipboard_banner_title),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Link,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = domain.ifBlank { url },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                        Text(
+                            text = domain.ifBlank { url },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics {
+                                    contentDescription = "$clipboardBannerTitle: ${domain.ifBlank { url }}"
+                                }
+                        )
 
                         IconButton(
                             onClick = onDismiss,

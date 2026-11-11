@@ -63,6 +63,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -170,6 +172,10 @@ fun MainRoute(
     }
 }
 
+/**
+ * Layar utama aplikasi yang menampilkan daftar unduhan, filter status, saran clipboard,
+ * dan aksi cepat untuk menambah tautan atau membuka pengaturan.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -333,11 +339,20 @@ fun MainScreen(
     }
 }
 
+/**
+ * Lencana indikator kesiapan mesin yt-dlp dan aria2c pada app bar.
+ */
 @Composable
 private fun EngineStatusBadge(
     isReady: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val statusText = if (isReady) {
+        stringResource(R.string.engine_ready)
+    } else {
+        stringResource(R.string.engine_initializing)
+    }
+
     Surface(
         shape = CircleShape,
         color = if (isReady) {
@@ -345,7 +360,9 @@ private fun EngineStatusBadge(
         } else {
             MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
         },
-        modifier = modifier
+        modifier = modifier.semantics(mergeDescendants = true) {
+            contentDescription = statusText
+        }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -361,11 +378,7 @@ private fun EngineStatusBadge(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isReady) {
-                    stringResource(R.string.engine_ready)
-                } else {
-                    stringResource(R.string.engine_initializing)
-                },
+                text = statusText,
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isReady) {
                     MaterialTheme.colorScheme.secondary
@@ -430,6 +443,9 @@ private fun FilterChipRow(
     }
 }
 
+/**
+ * Tampilan kosong ketika tidak ada tugas unduhan yang sesuai dengan filter aktif.
+ */
 @Composable
 private fun EmptyStateView(
     filter: TaskFilter,
@@ -473,23 +489,29 @@ private fun EmptyStateView(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            if (filter == TaskFilter.ALL) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = stringResource(R.string.empty_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+                Text(
+                    text = stringResource(R.string.empty_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
 
+/**
+ * Dialog untuk memasukkan tautan URL unduhan secara manual beserta pemilihan preset format.
+ */
 @Composable
 private fun AddManualUrlDialog(
     defaultPreset: DownloadPreset,
     onDismiss: () -> Unit,
-    onStartDownload: (String, DownloadPreset) -> Unit
+    onStartDownload: (String, DownloadPreset) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var urlText by rememberSaveable { mutableStateOf("") }
     var selectedPreset by rememberSaveable { mutableStateOf(defaultPreset) }
@@ -498,6 +520,7 @@ private fun AddManualUrlDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -556,14 +579,6 @@ private fun AddManualUrlDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = "Pilih Kualitas:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
@@ -618,16 +633,21 @@ private fun AddManualUrlDialog(
     )
 }
 
+/**
+ * Dialog untuk menampilkan log detail kesalahan unduhan dan menyalinnya ke papan klip.
+ */
 @Composable
 private fun TaskErrorDialog(
     task: DownloadTaskEntity,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val fullError = task.errorMessage ?: "Tidak ada log kesalahan yang tercatat."
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Text(
                 text = stringResource(R.string.error_dialog_title),
