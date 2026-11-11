@@ -47,6 +47,10 @@ class SwiftGrabApp : Application() {
         initDownloadEnginesAsync(engineInitDeferred)
     }
 
+    /**
+     * Menunggu kesiapan mesin unduhan (yt-dlp, FFmpeg, dan aria2c), dan melakukan
+     * satu kali percobaan ulang otomatis jika inisialisasi sebelumnya gagal.
+     */
     suspend fun awaitEngineReady(): Result<Unit> {
         val result = engineInitDeferred.await()
         if (result.isFailure) {
@@ -55,6 +59,10 @@ class SwiftGrabApp : Application() {
         return result
     }
 
+    /**
+     * Memicu ulang inisialisasi mesin unduhan secara sinkron dan thread-safe apabila
+     * percobaan sebelumnya telah selesai dengan status gagal.
+     */
     @Synchronized
     fun retryEngineInit(): CompletableDeferred<Result<Unit>> {
         if (engineInitFailed && engineInitDeferred.isCompleted) {
@@ -93,6 +101,10 @@ class SwiftGrabApp : Application() {
         }
     }
 
+    /**
+     * Mengekstrak dan menginisialisasi biner native YoutubeDL, FFmpeg, dan Aria2c secara asinkron
+     * di dispatcher IO agar tidak memblokir main thread saat aplikasi pertama kali dijalankan.
+     */
     private fun initDownloadEnginesAsync(deferred: CompletableDeferred<Result<Unit>>) {
         appScope.launch {
             try {

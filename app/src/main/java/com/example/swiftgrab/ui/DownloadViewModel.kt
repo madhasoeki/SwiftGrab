@@ -182,6 +182,9 @@ class DownloadViewModel(
         }
     }
 
+    /**
+     * Mengembalikan versi biner yt-dlp yang terpasang, atau fallback aman jika mesin belum siap.
+     */
     fun getYtDlpVersion(): String {
         return try {
             YoutubeDL.getInstance().versionName(getApplication()) ?: "Siap"
@@ -202,6 +205,9 @@ class DownloadViewModel(
         preferences.setAutoStartClipboard(enabled)
     }
 
+    /**
+     * Memeriksa kesiapan mesin unduhan terlebih dahulu lalu memperbarui biner yt-dlp ke kanal stabil.
+     */
     fun updateYoutubeDL() {
         if (_ytdlUpdateStatus.value is YtDlpUpdateState.Updating) return
         _ytdlUpdateStatus.value = YtDlpUpdateState.Updating

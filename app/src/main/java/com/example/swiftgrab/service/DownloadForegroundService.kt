@@ -150,6 +150,10 @@ class DownloadForegroundService : Service() {
         activeJobs[task.id] = job
     }
 
+    /**
+     * Menjalankan proses unduhan yt-dlp dan aria2c untuk satu [DownloadTaskEntity], memperbarui
+     * progres ke Room serta notifikasi foreground secara periodik, dan menangani hasil/error.
+     */
     private suspend fun executeDownload(task: DownloadTaskEntity) {
         val taskId = task.id
         Log.i(TAG, "Starting download execution for task: $taskId (url: ${task.url})")
@@ -272,6 +276,10 @@ class DownloadForegroundService : Service() {
         }
     }
 
+    /**
+     * Menangani kegagalan atau pembatalan unduhan berdasarkan status jeda/batal pengguna,
+     * cancellation coroutine, maupun error atau exception native dari mesin unduhan.
+     */
     private suspend fun handleDownloadError(
         task: DownloadTaskEntity,
         t: Throwable,
