@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,6 +73,7 @@ fun XLoginDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var webProgress by remember { mutableFloatStateOf(0f) }
     var isAuthDetected by remember { mutableStateOf(false) }
@@ -128,7 +130,7 @@ fun XLoginDialog(
                                     CookieStorageManager.saveXCookies(context, merged)
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.x_login_success),
+                                        resources.getString(R.string.x_login_success),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     onLoginSuccess()
