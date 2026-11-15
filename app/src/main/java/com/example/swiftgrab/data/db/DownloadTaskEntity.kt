@@ -31,6 +31,7 @@ data class DownloadTaskEntity(
     val url: String,
     val title: String,
     val thumbnailUrl: String? = null,
+    val durationSeconds: Long = 0L,
     val formatLabel: String = "Auto",
     val audioOnly: Boolean = false,
     val status: DownloadStatus = DownloadStatus.QUEUED,

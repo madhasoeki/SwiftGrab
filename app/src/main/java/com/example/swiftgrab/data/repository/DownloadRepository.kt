@@ -36,6 +36,7 @@ class DownloadRepository(
         url: String,
         title: String = url,
         thumbnailUrl: String? = null,
+        durationSeconds: Long = 0L,
         formatLabel: String = "Auto",
         audioOnly: Boolean = false,
         id: String = UUID.randomUUID().toString()
@@ -45,6 +46,7 @@ class DownloadRepository(
             url = url,
             title = title,
             thumbnailUrl = thumbnailUrl,
+            durationSeconds = durationSeconds,
             formatLabel = formatLabel,
             audioOnly = audioOnly,
             status = DownloadStatus.QUEUED
@@ -75,12 +77,14 @@ class DownloadRepository(
         id: String,
         title: String,
         thumbnailUrl: String?,
+        durationSeconds: Long = 0L,
         formatLabel: String
     ) {
         downloadDao.updateMetadata(
             id = id,
             title = title,
             thumbnailUrl = thumbnailUrl,
+            durationSeconds = durationSeconds,
             formatLabel = formatLabel
         )
     }

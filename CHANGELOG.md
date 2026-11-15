@@ -8,6 +8,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Ditambahkan
+- Pengambilan metadata & thumbnail media asinkron (`MediaMetadataExtractor`) menggunakan `yt-dlp --dump-single-json --no-download` untuk mengisi judul asli, `thumbnailUrl`, dan durasi media (`durationSeconds`) pada kartu unduhan (`DownloadTaskCard`) serta pratinjau langsung di `QuickFormatSheet`.
+- Migrasi skema Room Database (`v1` ke `v2`) untuk menambahkan kolom `durationSeconds` pada tabel `download_tasks`.
+
 ### Diubah
 - Otomatisasi review Pull Request menggunakan PR-Agent (`the-pr-agent/pr-agent`) melalui gateway OpenAI-compatible.
 - Integrasi `CHANGELOG.md` ke workflow `Release APK` agar catatan rilis di GitHub Releases dan dialog pembaruan aplikasi lebih rapi.

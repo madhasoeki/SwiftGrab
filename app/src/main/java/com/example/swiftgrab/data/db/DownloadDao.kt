@@ -58,9 +58,10 @@ interface DownloadDao {
     @Query(
         """
         UPDATE download_tasks
-        SET title = :title,
-            thumbnailUrl = :thumbnailUrl,
-            formatLabel = :formatLabel,
+        SET title = CASE WHEN :title != '' THEN :title ELSE title END,
+            thumbnailUrl = COALESCE(:thumbnailUrl, thumbnailUrl),
+            durationSeconds = CASE WHEN :durationSeconds > 0 THEN :durationSeconds ELSE durationSeconds END,
+            formatLabel = CASE WHEN :formatLabel != '' THEN :formatLabel ELSE formatLabel END,
             updatedAt = :updatedAt
         WHERE id = :id
         """
@@ -69,6 +70,7 @@ interface DownloadDao {
         id: String,
         title: String,
         thumbnailUrl: String?,
+        durationSeconds: Long = 0L,
         formatLabel: String,
         updatedAt: Long = System.currentTimeMillis()
     )

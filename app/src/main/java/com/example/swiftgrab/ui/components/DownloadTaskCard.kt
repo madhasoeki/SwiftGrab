@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Card
@@ -32,6 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +55,7 @@ import coil.request.ImageRequest
 import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
+import com.example.swiftgrab.service.MediaMetadataExtractor
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import java.util.Locale
 
@@ -103,7 +109,15 @@ fun DownloadTaskCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    FormatBadge(label = task.formatLabel, audioOnly = task.audioOnly)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FormatBadge(label = task.formatLabel, audioOnly = task.audioOnly)
+                        if (task.durationSeconds > 0L) {
+                            DurationBadge(durationSeconds = task.durationSeconds)
+                        }
+                    }
                 }
             }
 
@@ -180,6 +194,9 @@ private fun MediaThumbnail(
     audioOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
+    var imageLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
+    var imageLoadFailed by remember(thumbnailUrl) { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .size(width = 64.dp, height = 36.dp)
@@ -187,7 +204,7 @@ private fun MediaThumbnail(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
-        if (!thumbnailUrl.isNullOrBlank()) {
+        if (!thumbnailUrl.isNullOrBlank() && !imageLoadFailed) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(thumbnailUrl)
@@ -195,14 +212,53 @@ private fun MediaThumbnail(
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                onSuccess = { imageLoaded = true },
+                onError = { imageLoadFailed = true },
                 modifier = Modifier.matchParentSize()
             )
-        } else {
+        }
+        if (thumbnailUrl.isNullOrBlank() || imageLoadFailed || !imageLoaded) {
             Icon(
                 imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DurationBadge(
+    durationSeconds: Long,
+    modifier: Modifier = Modifier
+) {
+    val formatted = MediaMetadataExtractor.formatDuration(durationSeconds)
+    if (formatted.isEmpty()) return
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = formatted,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -479,6 +535,7 @@ private fun DownloadTaskCardDownloadingPreview() {
                 id = "1",
                 url = "https://youtube.com/watch?v=demo",
                 title = "Amazing Nature 4K HDR Documentary Sample",
+                durationSeconds = 185L,
                 formatLabel = "MP4 1080p",
                 status = DownloadStatus.DOWNLOADING,
                 progress = 68.4f,
@@ -508,6 +565,7 @@ private fun DownloadTaskCardPausedPreview() {
                 id = "2",
                 url = "https://youtube.com/watch?v=demo2",
                 title = "Cyberpunk Music Mix 2026 Synthwave",
+                durationSeconds = 3725L,
                 formatLabel = "MP3",
                 audioOnly = true,
                 status = DownloadStatus.PAUSED,

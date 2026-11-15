@@ -72,15 +72,17 @@ class DownloadRepositoryTest {
             id: String,
             title: String,
             thumbnailUrl: String?,
+            durationSeconds: Long,
             formatLabel: String,
             updatedAt: Long
         ) {
             val current = tasks.value[id] ?: return
             tasks.value = tasks.value + (
                 id to current.copy(
-                    title = title,
-                    thumbnailUrl = thumbnailUrl,
-                    formatLabel = formatLabel,
+                    title = title.ifEmpty { current.title },
+                    thumbnailUrl = thumbnailUrl ?: current.thumbnailUrl,
+                    durationSeconds = if (durationSeconds > 0L) durationSeconds else current.durationSeconds,
+                    formatLabel = formatLabel.ifEmpty { current.formatLabel },
                     updatedAt = updatedAt
                 )
             )
@@ -329,5 +331,45 @@ class DownloadRepositoryTest {
 
         // Calling reconcileInterruptedDownload on a non-DOWNLOADING task must be a no-op
         assertEquals(0, repo.reconcileInterruptedDownload("orphaned-1"))
+    }
+
+    @Test
+    fun `updateMetadata updates thumbnail and duration and preserves them when fallback update passes null`() = runTest {
+        val repo = DownloadRepository(FakeDownloadDao())
+
+        val created = repo.createTask(
+            id = "meta-1",
+            url = "https://example.com/watch?v=1",
+            formatLabel = "MP4 1080p"
+        )
+        assertNull(created.thumbnailUrl)
+        assertEquals(0L, created.durationSeconds)
+
+        repo.updateMetadata(
+            id = "meta-1",
+            title = "Real Video Title",
+            thumbnailUrl = "https://cdn.example.com/thumb.jpg",
+            durationSeconds = 245L,
+            formatLabel = "MP4 1080p"
+        )
+
+        val enriched = repo.getTask("meta-1")
+        assertEquals("Real Video Title", enriched?.title)
+        assertEquals("https://cdn.example.com/thumb.jpg", enriched?.thumbnailUrl)
+        assertEquals(245L, enriched?.durationSeconds)
+
+        // Fallback destination log update without thumbnail/duration must not wipe existing values
+        repo.updateMetadata(
+            id = "meta-1",
+            title = "Fallback Filename Title",
+            thumbnailUrl = null,
+            durationSeconds = 0L,
+            formatLabel = "MP4 1080p"
+        )
+
+        val afterFallback = repo.getTask("meta-1")
+        assertEquals("Fallback Filename Title", afterFallback?.title)
+        assertEquals("https://cdn.example.com/thumb.jpg", afterFallback?.thumbnailUrl)
+        assertEquals(245L, afterFallback?.durationSeconds)
     }
 }
