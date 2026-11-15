@@ -265,6 +265,9 @@ class DownloadForegroundService : Service() {
                     }
 
                     if (throttler.shouldUpdate()) {
+                        if (pausedTaskIds.contains(taskId) || canceledTaskIds.contains(taskId)) {
+                            return@execute
+                        }
                         repository.updateLiveProgress(
                             id = taskId,
                             progress = latestProgress,
@@ -273,6 +276,9 @@ class DownloadForegroundService : Service() {
                             speed = latestSpeed,
                             eta = latestEta
                         )
+                        if (pausedTaskIds.contains(taskId) || canceledTaskIds.contains(taskId)) {
+                            return@execute
+                        }
                         updateForegroundProgressNotification(
                             taskId = taskId,
                             title = latestTitle,
