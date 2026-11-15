@@ -8,15 +8,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-11-15
+
 ### Ditambahkan
-- Pengambilan metadata & thumbnail media asinkron (`MediaMetadataExtractor`) menggunakan `yt-dlp --dump-single-json --no-download` untuk mengisi judul asli, `thumbnailUrl`, dan durasi media (`durationSeconds`) pada kartu unduhan (`DownloadTaskCard`) serta pratinjau langsung di `QuickFormatSheet`.
+- Pengambilan metadata & thumbnail media asinkron (`MediaMetadataExtractor`) menggunakan `yt-dlp --dump-single-json --no-download` untuk menampilkan judul asli, gambar pratinjau, dan durasi media (`durationSeconds`) pada kartu unduhan serta dialog `QuickFormatSheet`.
 - Migrasi skema Room Database (`v1` ke `v2`) untuk menambahkan kolom `durationSeconds` pada tabel `download_tasks`.
-- Tombol aksi **Buka** dan **Bagikan** langsung pada notifikasi unduhan selesai (`showCompletedNotification`) melalui `NotificationFileActionActivity` dan `FileSharingHelper`.
+- Tombol aksi **Buka** dan **Bagikan** langsung pada notifikasi unduhan selesai (`NotificationFileActionActivity` dan `FileSharingHelper`).
+- Dukungan unduhan batch multi-baris pada `AddManualUrlDialog` melalui pemisahan banyak URL (`UrlValidator.extractUrls`).
+- Pengujian unit dan UI Jetpack Compose untuk `DownloadViewModel`, `MainScreen`, dan `DownloadTaskCard`, serta pemeriksaan `lintDebug` di CI.
 
 ### Diubah
-- Isolasi rekomposisi progres unduhan pada `LazyColumn` dengan memindahkan progres langsung (*progress*, *speed*, *ETA*, *bytes*) ke `StateFlow<Map<String, LiveProgress>>` di memori dan pembacaan *deferred* di `DownloadTaskCard` agar `MainScreen`, `FilterChipRow`, thumbnail, dan tombol aksi tidak ikut direkomposisi setiap 250 ms.
-- Otomatisasi review Pull Request menggunakan PR-Agent (`the-pr-agent/pr-agent`) melalui gateway OpenAI-compatible.
-- Integrasi `CHANGELOG.md` ke workflow `Release APK` agar catatan rilis di GitHub Releases dan dialog pembaruan aplikasi lebih rapi.
+- Isolasi rekomposisi progres unduhan pada `LazyColumn` dengan memindahkan progres langsung (*progress*, *speed*, *ETA*, *bytes*) ke `StateFlow<Map<String, LiveProgress>>` dan pembacaan *deferred* di `DownloadTaskCard` agar UI daftar tidak ikut direkomposisi setiap 250 ms.
+- Otomatisasi review Pull Request menggunakan PR-Agent serta integrasi ekstraksi catatan rilis dari `CHANGELOG.md` pada workflow `Release APK`.
+
+### Diperbaiki
+- Pemulihan otomatis tugas unduhan berstatus `DOWNLOADING` yang terhenti akibat *crash* atau *force-kill* menjadi terjeda (`PAUSED`) saat aplikasi atau layanan dimulai ulang.
+- Pembersihan berkas sementara (*staging*) di penyimpanan privat saat pengguna menghapus tugas unduhan.
 
 ## [0.0.3] - 2026-11-15
 
@@ -47,7 +54,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ### Diperbaiki
 - Penyesuaian aturan ProGuard/R8 untuk `youtubedl-android` serta penyederhanaan tata letak dan aksesibilitas UI.
 
-[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/madhasoeki/SwiftGrab/releases/tag/v0.0.1
