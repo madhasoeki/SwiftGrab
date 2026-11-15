@@ -33,6 +33,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +63,7 @@ import coil.request.ImageRequest
 import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
+import com.example.swiftgrab.data.repository.LiveProgress
 import com.example.swiftgrab.service.MediaMetadataExtractor
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import java.util.Locale
@@ -76,7 +79,8 @@ fun DownloadTaskCard(
     onShareFile: (String) -> Unit,
     onRetry: (DownloadTaskEntity) -> Unit,
     onShowError: (DownloadTaskEntity) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    liveProgressProvider: () -> LiveProgress? = { null }
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -151,8 +155,18 @@ fun DownloadTaskCard(
                     strokeCap = StrokeCap.Round
                 )
             } else {
+                val progressProvider: () -> Float = remember(task.id, task.status, task.progress, liveProgressProvider) {
+                    {
+                        val currentProgress = if (task.status == DownloadStatus.DOWNLOADING) {
+                            liveProgressProvider()?.progress ?: task.progress
+                        } else {
+                            task.progress
+                        }
+                        (currentProgress / 100f).coerceIn(0f, 1f)
+                    }
+                }
                 LinearProgressIndicator(
-                    progress = { (task.progress / 100f).coerceIn(0f, 1f) },
+                    progress = progressProvider,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -172,7 +186,15 @@ fun DownloadTaskCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 MetricsText(
-                    task = task,
+                    taskId = task.id,
+                    status = task.status,
+                    fallbackProgress = task.progress,
+                    fallbackDownloadedBytes = task.downloadedBytes,
+                    fallbackTotalBytes = task.totalBytes,
+                    fallbackSpeed = task.speed,
+                    fallbackEta = task.eta,
+                    errorMessage = task.errorMessage,
+                    liveProgressProvider = liveProgressProvider,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -326,28 +348,48 @@ private fun FormatBadge(
 
 @Composable
 private fun MetricsText(
-    task: DownloadTaskEntity,
+    taskId: String,
+    status: DownloadStatus,
+    fallbackProgress: Float,
+    fallbackDownloadedBytes: Long,
+    fallbackTotalBytes: Long,
+    fallbackSpeed: String,
+    fallbackEta: String,
+    errorMessage: String?,
+    liveProgressProvider: () -> LiveProgress?,
     modifier: Modifier = Modifier
 ) {
-    val text = when (task.status) {
+    val liveProgress by remember(taskId, status, liveProgressProvider) {
+        derivedStateOf {
+            if (status == DownloadStatus.DOWNLOADING) liveProgressProvider() else null
+        }
+    }
+
+    val text = when (status) {
         DownloadStatus.DOWNLOADING -> {
-            val progressInt = task.progress.toInt().coerceIn(0, 100)
-            val downloaded = formatBytes(task.downloadedBytes)
-            val total = if (task.totalBytes > 0L) formatBytes(task.totalBytes) else "--"
-            val speedPart = if (task.speed.isNotBlank()) " • ${task.speed}" else ""
-            val etaPart = if (task.eta.isNotBlank()) " • ETA ${task.eta}" else ""
+            val progressValue = liveProgress?.progress ?: fallbackProgress
+            val downloadedBytes = liveProgress?.downloadedBytes ?: fallbackDownloadedBytes
+            val totalBytes = liveProgress?.totalBytes ?: fallbackTotalBytes
+            val speed = liveProgress?.speed ?: fallbackSpeed
+            val eta = liveProgress?.eta ?: fallbackEta
+
+            val progressInt = progressValue.toInt().coerceIn(0, 100)
+            val downloaded = formatBytes(downloadedBytes)
+            val total = if (totalBytes > 0L) formatBytes(totalBytes) else "--"
+            val speedPart = if (speed.isNotBlank()) " • $speed" else ""
+            val etaPart = if (eta.isNotBlank()) " • ETA $eta" else ""
             "$downloaded / $total • $progressInt%$speedPart$etaPart"
         }
         DownloadStatus.PAUSED -> {
-            val progressInt = task.progress.toInt().coerceIn(0, 100)
+            val progressInt = fallbackProgress.toInt().coerceIn(0, 100)
             "Dijeda • $progressInt%"
         }
         DownloadStatus.COMPLETED -> {
-            val size = if (task.totalBytes > 0L) formatBytes(task.totalBytes) else ""
+            val size = if (fallbackTotalBytes > 0L) formatBytes(fallbackTotalBytes) else ""
             if (size.isNotBlank()) "Selesai • $size" else "Selesai"
         }
         DownloadStatus.FAILED -> {
-            val err = parseDisplayError(task.errorMessage)
+            val err = parseDisplayError(errorMessage)
             "Gagal • $err"
         }
         DownloadStatus.CANCELED -> "Dibatalkan"
@@ -357,7 +399,7 @@ private fun MetricsText(
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
-        color = when (task.status) {
+        color = when (status) {
             DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
             DownloadStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
             DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
