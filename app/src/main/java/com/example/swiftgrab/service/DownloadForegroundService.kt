@@ -23,9 +23,12 @@ import com.example.swiftgrab.data.repository.DownloadRepository
 import com.example.swiftgrab.ui.MainActivity
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
@@ -52,6 +55,10 @@ class DownloadForegroundService : Service() {
     private val pausedTaskIds = ConcurrentHashMap.newKeySet<String>()
     private val canceledTaskIds = ConcurrentHashMap.newKeySet<String>()
     private val throttlers = ConcurrentHashMap<String, UpdateThrottler>()
+    private val jobLock = Any()
+    private val serviceReadyDeferred = CompletableDeferred<Unit>()
+    @Volatile
+    private var isDestroying = false
 
     private var queueCollectorJob: Job? = null
 
@@ -60,7 +67,22 @@ class DownloadForegroundService : Service() {
         repository = (application as SwiftGrabApp).repository
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        startQueueObserver()
+        serviceScope.launch {
+            try {
+                (application as? SwiftGrabApp)?.awaitStartupReconciliation()
+                val recovered = repository.reconcileInterruptedDownloads(activeTaskIds = activeJobs.keys.toSet())
+                if (recovered > 0) {
+                    Log.i(TAG, "Recovered $recovered orphaned DOWNLOADING task(s) to PAUSED in service onCreate")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error reconciling orphaned DOWNLOADING tasks in onCreate", t)
+            } finally {
+                serviceReadyDeferred.complete(Unit)
+            }
+            startQueueObserver()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -84,6 +106,7 @@ class DownloadForegroundService : Service() {
 
                 serviceScope.launch {
                     try {
+                        serviceReadyDeferred.await()
                         if (taskId != null) {
                             val existing = repository.getTask(taskId)
                             if (existing != null) {
@@ -144,14 +167,18 @@ class DownloadForegroundService : Service() {
     }
 
     private fun startDownloadJob(task: DownloadTaskEntity) {
-        pausedTaskIds.remove(task.id)
-        canceledTaskIds.remove(task.id)
-        DownloadFileManager.clearTaskCanceled(task.id)
+        synchronized(jobLock) {
+            if (activeJobs.containsKey(task.id)) return
+            pausedTaskIds.remove(task.id)
+            canceledTaskIds.remove(task.id)
+            DownloadFileManager.clearTaskCanceled(task.id)
 
-        val job = serviceScope.launch {
-            executeDownload(task)
+            val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+                executeDownload(task)
+            }
+            activeJobs[task.id] = job
+            job.start()
         }
-        activeJobs[task.id] = job
     }
 
     /**
@@ -318,28 +345,34 @@ class DownloadForegroundService : Service() {
         lastTotalBytes: Long
     ) {
         val taskId = task.id
-        when {
-            pausedTaskIds.remove(taskId) -> {
-                Log.d(TAG, "Task $taskId was paused by user")
-                repository.updateStatus(taskId, DownloadStatus.PAUSED)
-                updatePausedNotification(taskId, task.title, lastProgress)
-            }
-            canceledTaskIds.remove(taskId) -> {
-                Log.d(TAG, "Task $taskId was canceled by user")
-                DownloadFileManager.cleanupTemporaryFiles(this, taskId)
-                repository.updateStatus(taskId, DownloadStatus.CANCELED)
-                notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
-            }
-            t is CancellationException -> {
-                Log.d(TAG, "Task $taskId coroutine was canceled")
-                repository.updateStatus(taskId, DownloadStatus.PAUSED)
-                updatePausedNotification(taskId, task.title, lastProgress)
-            }
-            else -> {
-                Log.e(TAG, "Task $taskId failed with exception: ${t.message}", t)
-                val errorMessage = t.message ?: "Download failed"
-                repository.updateStatus(taskId, DownloadStatus.FAILED, errorMessage = errorMessage)
-                showFailedNotification(taskId, task.title, errorMessage)
+        withContext(NonCancellable) {
+            when {
+                pausedTaskIds.remove(taskId) -> {
+                    Log.d(TAG, "Task $taskId was paused by user")
+                    repository.updateStatus(taskId, DownloadStatus.PAUSED)
+                    if (!isDestroying) {
+                        updatePausedNotification(taskId, task.title, lastProgress)
+                    }
+                }
+                canceledTaskIds.remove(taskId) -> {
+                    Log.d(TAG, "Task $taskId was canceled by user")
+                    DownloadFileManager.cleanupTemporaryFiles(this@DownloadForegroundService, taskId)
+                    repository.updateStatus(taskId, DownloadStatus.CANCELED)
+                    notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
+                }
+                t is CancellationException -> {
+                    Log.d(TAG, "Task $taskId coroutine was canceled")
+                    repository.updateStatus(taskId, DownloadStatus.PAUSED)
+                    if (!isDestroying) {
+                        updatePausedNotification(taskId, task.title, lastProgress)
+                    }
+                }
+                else -> {
+                    Log.e(TAG, "Task $taskId failed with exception: ${t.message}", t)
+                    val errorMessage = t.message ?: "Download failed"
+                    repository.updateStatus(taskId, DownloadStatus.FAILED, errorMessage = errorMessage)
+                    showFailedNotification(taskId, task.title, errorMessage)
+                }
             }
         }
     }
@@ -349,6 +382,7 @@ class DownloadForegroundService : Service() {
         canceledTaskIds.remove(taskId)
 
         serviceScope.launch(Dispatchers.IO) {
+            serviceReadyDeferred.await()
             try {
                 Log.d(TAG, "Pausing process for task: $taskId")
                 YoutubeDL.getInstance().destroyProcessById(taskId)
@@ -373,9 +407,10 @@ class DownloadForegroundService : Service() {
         DownloadFileManager.clearTaskCanceled(taskId)
 
         serviceScope.launch {
+            serviceReadyDeferred.await()
             repository.updateStatus(taskId, DownloadStatus.QUEUED)
             val task = repository.getTask(taskId)
-            if (task != null && !activeJobs.containsKey(taskId)) {
+            if (task != null) {
                 startDownloadJob(task)
             }
         }
@@ -387,6 +422,7 @@ class DownloadForegroundService : Service() {
         DownloadFileManager.markTaskCanceled(taskId)
 
         serviceScope.launch(Dispatchers.IO) {
+            serviceReadyDeferred.await()
             try {
                 Log.d(TAG, "Canceling and destroying process for task: $taskId")
                 YoutubeDL.getInstance().destroyProcessById(taskId)
@@ -409,8 +445,10 @@ class DownloadForegroundService : Service() {
     private fun checkAndStopIfIdle() {
         if (activeJobs.isEmpty()) {
             serviceScope.launch {
+                serviceReadyDeferred.await()
+                if (activeJobs.isNotEmpty()) return@launch
                 val queued = repository.getTasksByStatus(DownloadStatus.QUEUED)
-                if (queued.isEmpty()) {
+                if (queued.isEmpty() && activeJobs.isEmpty()) {
                     Log.d(TAG, "No active or queued downloads remaining, stopping foreground service.")
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -441,8 +479,13 @@ class DownloadForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        isDestroying = true
+        val orphanedIds = activeJobs.keys.filterNot { canceledTaskIds.contains(it) }
         queueCollectorJob?.cancel()
         serviceScope.cancel()
+        if (orphanedIds.isNotEmpty()) {
+            (application as? SwiftGrabApp)?.pauseInterruptedDownloadsAsync(orphanedIds)
+        }
         super.onDestroy()
     }
 

@@ -102,6 +102,50 @@ class DownloadRepositoryTest {
             )
         }
 
+        override suspend fun reconcileDownloadingTasksToPaused(
+            downloadingStatus: DownloadStatus,
+            pausedStatus: DownloadStatus,
+            updatedAt: Long
+        ): Int {
+            var updated = 0
+            val nextMap = tasks.value.mapValues { (_, task) ->
+                if (task.status == downloadingStatus) {
+                    updated++
+                    task.copy(
+                        status = pausedStatus,
+                        speed = "",
+                        eta = "",
+                        errorMessage = null,
+                        updatedAt = updatedAt
+                    )
+                } else {
+                    task
+                }
+            }
+            tasks.value = nextMap
+            return updated
+        }
+
+        override suspend fun reconcileDownloadingTaskToPaused(
+            id: String,
+            downloadingStatus: DownloadStatus,
+            pausedStatus: DownloadStatus,
+            updatedAt: Long
+        ): Int {
+            val current = tasks.value[id] ?: return 0
+            if (current.status != downloadingStatus) return 0
+            tasks.value = tasks.value + (
+                id to current.copy(
+                    status = pausedStatus,
+                    speed = "",
+                    eta = "",
+                    errorMessage = null,
+                    updatedAt = updatedAt
+                )
+            )
+            return 1
+        }
+
         override suspend fun markCompleted(
             id: String,
             outputPath: String,
@@ -177,5 +221,113 @@ class DownloadRepositoryTest {
 
         repo.deleteCompletedTasks()
         assertNull(repo.getTask("task-1"))
+    }
+
+    @Test
+    fun `reconcileInterruptedDownloads converts stuck DOWNLOADING tasks to PAUSED while preserving progress`() = runTest {
+        val dao = FakeDownloadDao()
+        val repo = DownloadRepository(dao)
+
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "stuck-1",
+                url = "https://example.com/1",
+                title = "Video 1",
+                status = DownloadStatus.DOWNLOADING,
+                progress = 42.5f,
+                downloadedBytes = 425_000L,
+                totalBytes = 1_000_000L,
+                speed = "3.2 MB/s",
+                eta = "00:12"
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "queued-1",
+                url = "https://example.com/2",
+                title = "Video 2",
+                status = DownloadStatus.QUEUED
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "completed-1",
+                url = "https://example.com/3",
+                title = "Video 3",
+                status = DownloadStatus.COMPLETED,
+                progress = 100f
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "failed-1",
+                url = "https://example.com/4",
+                title = "Video 4",
+                status = DownloadStatus.FAILED,
+                errorMessage = "Network error"
+            )
+        )
+
+        val recovered = repo.reconcileInterruptedDownloads()
+        assertEquals(1, recovered)
+
+        val stuck = repo.getTask("stuck-1")
+        assertEquals(DownloadStatus.PAUSED, stuck?.status)
+        assertEquals(42.5f, stuck?.progress)
+        assertEquals(425_000L, stuck?.downloadedBytes)
+        assertEquals(1_000_000L, stuck?.totalBytes)
+        assertEquals("", stuck?.speed)
+        assertEquals("", stuck?.eta)
+        assertNull(stuck?.errorMessage)
+
+        assertEquals(DownloadStatus.QUEUED, repo.getTask("queued-1")?.status)
+        assertEquals(DownloadStatus.COMPLETED, repo.getTask("completed-1")?.status)
+        assertEquals(DownloadStatus.FAILED, repo.getTask("failed-1")?.status)
+        assertEquals("Network error", repo.getTask("failed-1")?.errorMessage)
+    }
+
+    @Test
+    fun `reconcileInterruptedDownloads excludes active task ids and leaves non-downloading tasks untouched`() = runTest {
+        val dao = FakeDownloadDao()
+        val repo = DownloadRepository(dao)
+
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "active-1",
+                url = "https://example.com/active",
+                title = "Active",
+                status = DownloadStatus.DOWNLOADING,
+                progress = 60f,
+                speed = "5.0 MB/s",
+                eta = "00:05"
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "orphaned-1",
+                url = "https://example.com/orphaned",
+                title = "Orphaned",
+                status = DownloadStatus.DOWNLOADING,
+                progress = 20f,
+                speed = "1.0 MB/s",
+                eta = "00:40"
+            )
+        )
+
+        val recovered = repo.reconcileInterruptedDownloads(activeTaskIds = setOf("active-1"))
+        assertEquals(1, recovered)
+
+        val active = repo.getTask("active-1")
+        assertEquals(DownloadStatus.DOWNLOADING, active?.status)
+        assertEquals("5.0 MB/s", active?.speed)
+
+        val orphaned = repo.getTask("orphaned-1")
+        assertEquals(DownloadStatus.PAUSED, orphaned?.status)
+        assertEquals(20f, orphaned?.progress)
+        assertEquals("", orphaned?.speed)
+        assertEquals("", orphaned?.eta)
+
+        // Calling reconcileInterruptedDownload on a non-DOWNLOADING task must be a no-op
+        assertEquals(0, repo.reconcileInterruptedDownload("orphaned-1"))
     }
 }

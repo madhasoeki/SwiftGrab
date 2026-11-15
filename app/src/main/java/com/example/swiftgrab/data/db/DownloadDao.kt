@@ -112,6 +112,41 @@ interface DownloadDao {
         updatedAt: Long = System.currentTimeMillis()
     )
 
+    @Query(
+        """
+        UPDATE download_tasks
+        SET status = :pausedStatus,
+            speed = '',
+            eta = '',
+            errorMessage = NULL,
+            updatedAt = :updatedAt
+        WHERE status = :downloadingStatus
+        """
+    )
+    suspend fun reconcileDownloadingTasksToPaused(
+        downloadingStatus: DownloadStatus = DownloadStatus.DOWNLOADING,
+        pausedStatus: DownloadStatus = DownloadStatus.PAUSED,
+        updatedAt: Long = System.currentTimeMillis()
+    ): Int
+
+    @Query(
+        """
+        UPDATE download_tasks
+        SET status = :pausedStatus,
+            speed = '',
+            eta = '',
+            errorMessage = NULL,
+            updatedAt = :updatedAt
+        WHERE id = :id AND status = :downloadingStatus
+        """
+    )
+    suspend fun reconcileDownloadingTaskToPaused(
+        id: String,
+        downloadingStatus: DownloadStatus = DownloadStatus.DOWNLOADING,
+        pausedStatus: DownloadStatus = DownloadStatus.PAUSED,
+        updatedAt: Long = System.currentTimeMillis()
+    ): Int
+
     @Delete
     suspend fun deleteTask(task: DownloadTaskEntity)
 
