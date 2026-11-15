@@ -22,6 +22,7 @@
     <string name="toast_clipboard_empty">SwiftGrab: Papan klip tidak berisi tautan yang valid</string>
     <string name="format_sheet_title">Pilihan Format Unduhan</string>
     <string name="btn_start_download">Mulai Unduh</string>
+    <string name="btn_start_batch_download">Unduh %d Tautan</string>
     <string name="btn_cancel">Batal</string>
 
     <!-- UI MainScreen & Components -->
@@ -35,7 +36,9 @@
     <string name="empty_desc">Bagikan tautan dari aplikasi mana saja ke SwiftGrab, atau salin tautan lalu buka aplikasi ini untuk mengunduh otomatis.</string>
     <string name="btn_manual_link">+ Tautan Manual</string>
     <string name="manual_dialog_title">Tambah Unduhan Manual</string>
-    <string name="manual_dialog_hint">Tempel tautan video atau audio (http/https)</string>
+    <string name="manual_dialog_hint">Tempel satu atau beberapa tautan (http/https)</string>
+    <string name="manual_dialog_batch_helper">Pisahkan per baris untuk mengunduh beberapa tautan sekaligus</string>
+    <string name="manual_dialog_batch_count">%d tautan valid terdeteksi (unduhan batch)</string>
     <string name="manual_dialog_error">Tautan tidak valid atau kosong</string>
     <string name="clipboard_banner_title">Tautan terdeteksi di papan klip</string>
     <string name="btn_download_video">Unduh Video</string>
