@@ -36,6 +36,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -225,9 +227,7 @@ class DownloadForegroundService : Service() {
             title = task.title,
             thumbnailUrl = task.thumbnailUrl,
             durationSeconds = task.durationSeconds,
-            hasExtractorTitle = task.title.isNotBlank() &&
-                task.title != task.url &&
-                (!task.thumbnailUrl.isNullOrBlank() || task.durationSeconds > 0L)
+            hasExtractorTitle = task.title.isNotBlank() && task.title != task.url
         )
         var latestDownloadedBytes = task.downloadedBytes
         var latestTotalBytes = task.totalBytes
@@ -267,32 +267,35 @@ class DownloadForegroundService : Service() {
                     val resolvedThumb = meta.thumbnailUrl?.takeIf { it.isNotBlank() }
                     val resolvedDuration = meta.durationSeconds.coerceAtLeast(0L)
 
-                    if (resolvedTitle != null) {
-                        execState.hasExtractorTitle = true
-                        execState.title = resolvedTitle
-                    }
-                    if (resolvedThumb != null) {
-                        execState.thumbnailUrl = resolvedThumb
-                    }
-                    if (resolvedDuration > 0L) {
-                        execState.durationSeconds = resolvedDuration
-                    }
-
                     if (resolvedTitle != null || resolvedThumb != null || resolvedDuration > 0L) {
-                        repository.updateMetadata(
-                            id = taskId,
-                            title = resolvedTitle ?: execState.title,
-                            thumbnailUrl = resolvedThumb ?: execState.thumbnailUrl,
-                            durationSeconds = if (resolvedDuration > 0L) resolvedDuration else execState.durationSeconds,
-                            formatLabel = task.formatLabel
-                        )
+                        var persistedTitle = execState.title
+                        execState.metadataMutex.withLock {
+                            if (resolvedTitle != null) {
+                                execState.hasExtractorTitle = true
+                                execState.title = resolvedTitle
+                            }
+                            if (resolvedThumb != null) {
+                                execState.thumbnailUrl = resolvedThumb
+                            }
+                            if (resolvedDuration > 0L) {
+                                execState.durationSeconds = resolvedDuration
+                            }
+                            persistedTitle = execState.title
+                            repository.updateMetadata(
+                                id = taskId,
+                                title = persistedTitle,
+                                thumbnailUrl = execState.thumbnailUrl,
+                                durationSeconds = execState.durationSeconds,
+                                formatLabel = task.formatLabel
+                            )
+                        }
                         if (activeJobs.containsKey(taskId) &&
                             !pausedTaskIds.contains(taskId) &&
                             !canceledTaskIds.contains(taskId)
                         ) {
                             updateForegroundProgressNotification(
                                 taskId = taskId,
-                                title = execState.title,
+                                title = persistedTitle,
                                 progress = execState.progress,
                                 speed = execState.speed,
                                 eta = execState.eta
@@ -330,15 +333,19 @@ class DownloadForegroundService : Service() {
                             fileName.trim()
                         }
                         if (cleanTitle.isNotBlank() && cleanTitle != taskId && cleanTitle != execState.title) {
-                            execState.title = cleanTitle
                             serviceScope.launch {
-                                repository.updateMetadata(
-                                    id = taskId,
-                                    title = cleanTitle,
-                                    thumbnailUrl = execState.thumbnailUrl,
-                                    durationSeconds = execState.durationSeconds,
-                                    formatLabel = task.formatLabel
-                                )
+                                execState.metadataMutex.withLock {
+                                    if (!execState.hasExtractorTitle && cleanTitle != execState.title) {
+                                        execState.title = cleanTitle
+                                        repository.updateMetadata(
+                                            id = taskId,
+                                            title = cleanTitle,
+                                            thumbnailUrl = execState.thumbnailUrl,
+                                            durationSeconds = execState.durationSeconds,
+                                            formatLabel = task.formatLabel
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -365,6 +372,21 @@ class DownloadForegroundService : Service() {
                 }
             }
 
+            // Wait briefly for in-flight metadata before exporting, and stop if canceled
+            if (metadataJob != null && metadataJob.isActive) {
+                val joined = withTimeoutOrNull(METADATA_FINALIZE_GRACE_MS) {
+                    metadataJob.join()
+                    true
+                } ?: false
+                if (!joined && metadataJob.isActive) {
+                    metadataJob.cancel()
+                }
+            }
+
+            if (canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId) || !currentCoroutineContext().isActive) {
+                throw CancellationException("Download canceled before export")
+            }
+
             // Download completed successfully
             val completed = DownloadFileManager.finalizeCompletedMedia(
                 context = this,
@@ -377,12 +399,6 @@ class DownloadForegroundService : Service() {
                 throw CancellationException("Download canceled after export")
             }
 
-            if (metadataJob != null && metadataJob.isActive) {
-                withTimeoutOrNull(METADATA_FINALIZE_GRACE_MS) {
-                    metadataJob.join()
-                }
-            }
-
             val finalPath = completed.outputPath
             val finalSize = completed.fileSize.takeIf { it > 0L } ?: latestTotalBytes
             val completedFile = completed.file
@@ -391,14 +407,18 @@ class DownloadForegroundService : Service() {
             if (!execState.hasExtractorTitle && completedTitle != null && (execState.title == task.url || execState.title.isBlank())) {
                 val cleanTitle = if (completedTitle.contains(" [")) completedTitle.substringBeforeLast(" [") else completedTitle
                 if (cleanTitle.isNotBlank()) {
-                    execState.title = cleanTitle
-                    repository.updateMetadata(
-                        id = taskId,
-                        title = cleanTitle,
-                        thumbnailUrl = execState.thumbnailUrl,
-                        durationSeconds = execState.durationSeconds,
-                        formatLabel = task.formatLabel
-                    )
+                    execState.metadataMutex.withLock {
+                        if (!execState.hasExtractorTitle && (execState.title == task.url || execState.title.isBlank())) {
+                            execState.title = cleanTitle
+                            repository.updateMetadata(
+                                id = taskId,
+                                title = cleanTitle,
+                                thumbnailUrl = execState.thumbnailUrl,
+                                durationSeconds = execState.durationSeconds,
+                                formatLabel = task.formatLabel
+                            )
+                        }
+                    }
                 }
             }
 
@@ -779,7 +799,8 @@ class DownloadForegroundService : Service() {
         @Volatile var title: String,
         @Volatile var thumbnailUrl: String?,
         @Volatile var durationSeconds: Long,
-        @Volatile var hasExtractorTitle: Boolean
+        @Volatile var hasExtractorTitle: Boolean,
+        val metadataMutex: Mutex = Mutex()
     )
 
     private fun metadataProcessId(taskId: String): String = "meta_$taskId"

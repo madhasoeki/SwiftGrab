@@ -6,6 +6,7 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -41,6 +42,7 @@ object MediaMetadataExtractor {
         }
     }
 
+    @OptIn(InternalCoroutinesApi::class)
     suspend fun fetch(
         app: SwiftGrabApp,
         url: String,
@@ -55,7 +57,7 @@ object MediaMetadataExtractor {
         val request = buildMetadataRequest(url = url, cookiesFile = cookiesFile)
         return withContext(Dispatchers.IO) {
             val job = currentCoroutineContext()[Job]
-            val cancelHandle = job?.invokeOnCompletion { cause ->
+            val cancelHandle = job?.invokeOnCompletion(onCancelling = true) { cause ->
                 if (cause != null) {
                     app.destroyProcessAsync(processId)
                 }

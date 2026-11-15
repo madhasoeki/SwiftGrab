@@ -295,7 +295,7 @@ private fun MediaPreviewCard(
                 }
                 is QuickFormatMetadataState.Loaded -> {
                     val metadata = metadataState.metadata
-                    PreviewThumbnail(thumbnailUrl = metadata.thumbnailUrl)
+                    StatefulPreviewThumbnail(thumbnailUrl = metadata.thumbnailUrl)
 
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -354,7 +354,7 @@ private fun MediaPreviewCard(
                     }
                 }
                 is QuickFormatMetadataState.Unavailable -> {
-                    PreviewThumbnail(thumbnailUrl = null)
+                    StatefulPreviewThumbnail(thumbnailUrl = null)
 
                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -382,13 +382,38 @@ private fun MediaPreviewCard(
 }
 
 @Composable
-private fun PreviewThumbnail(
+private fun StatefulPreviewThumbnail(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier
 ) {
     var imageLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
     var imageLoadFailed by remember(thumbnailUrl) { mutableStateOf(false) }
 
+    PreviewThumbnail(
+        thumbnailUrl = thumbnailUrl,
+        imageLoaded = imageLoaded,
+        imageLoadFailed = imageLoadFailed,
+        onImageSuccess = {
+            imageLoaded = true
+            imageLoadFailed = false
+        },
+        onImageError = {
+            imageLoaded = false
+            imageLoadFailed = true
+        },
+        modifier = modifier
+    )
+}
+
+@Composable
+internal fun PreviewThumbnail(
+    thumbnailUrl: String?,
+    imageLoaded: Boolean,
+    imageLoadFailed: Boolean,
+    onImageSuccess: () -> Unit,
+    onImageError: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .size(width = 88.dp, height = 50.dp)
@@ -404,8 +429,8 @@ private fun PreviewThumbnail(
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                onSuccess = { imageLoaded = true },
-                onError = { imageLoadFailed = true },
+                onSuccess = { onImageSuccess() },
+                onError = { onImageError() },
                 modifier = Modifier.matchParentSize()
             )
         }

@@ -33,22 +33,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -194,8 +200,11 @@ private fun MediaThumbnail(
     audioOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var imageLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
-    var imageLoadFailed by remember(thumbnailUrl) { mutableStateOf(false) }
+    val fallbackPainter = rememberCenteredIconPainter(
+        imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
+        iconSize = 20.dp,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 
     Box(
         modifier = modifier
@@ -204,26 +213,49 @@ private fun MediaThumbnail(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
-        if (!thumbnailUrl.isNullOrBlank() && !imageLoadFailed) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onSuccess = { imageLoaded = true },
-                onError = { imageLoadFailed = true },
-                modifier = Modifier.matchParentSize()
-            )
-        }
-        if (thumbnailUrl.isNullOrBlank() || imageLoadFailed || !imageLoaded) {
-            Icon(
-                imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(thumbnailUrl?.takeIf { it.isNotBlank() })
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            placeholder = fallbackPainter,
+            error = fallbackPainter,
+            fallback = fallbackPainter,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize()
+        )
+    }
+}
+
+@Composable
+private fun rememberCenteredIconPainter(
+    imageVector: ImageVector,
+    iconSize: Dp,
+    tint: Color
+): Painter {
+    val vectorPainter = rememberVectorPainter(image = imageVector)
+    val density = LocalDensity.current
+    val iconSizePx = with(density) { iconSize.toPx() }
+    val colorFilter = remember(tint) { ColorFilter.tint(tint) }
+
+    return remember(vectorPainter, iconSizePx, colorFilter) {
+        object : Painter() {
+            override val intrinsicSize: Size = Size.Unspecified
+
+            override fun DrawScope.onDraw() {
+                val targetSize = minOf(iconSizePx, size.width, size.height)
+                val dx = (size.width - targetSize) / 2f
+                val dy = (size.height - targetSize) / 2f
+                translate(left = dx, top = dy) {
+                    with(vectorPainter) {
+                        draw(
+                            size = Size(targetSize, targetSize),
+                            colorFilter = colorFilter
+                        )
+                    }
+                }
+            }
         }
     }
 }
