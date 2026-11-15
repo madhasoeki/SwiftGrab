@@ -51,6 +51,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Activity Transparan Penangkap Aksi Buka & Bagikan dari Notifikasi Selesai -->
+        <activity
+            android:name=".ui.NotificationFileActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SwiftGrab.Transparent" />
+
         <!-- Layanan Unduhan Latar Belakang -->
         <service
             android:name=".service.DownloadForegroundService"

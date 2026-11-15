@@ -8,6 +8,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Ditambahkan
+- Tombol aksi **Buka** dan **Bagikan** langsung pada notifikasi unduhan selesai (`showCompletedNotification`) melalui `NotificationFileActionActivity` dan `FileSharingHelper`.
+
 ### Diubah
 - Otomatisasi review Pull Request menggunakan PR-Agent (`the-pr-agent/pr-agent`) melalui gateway OpenAI-compatible.
 - Integrasi `CHANGELOG.md` ke workflow `Release APK` agar catatan rilis di GitHub Releases dan dialog pembaruan aplikasi lebih rapi.
