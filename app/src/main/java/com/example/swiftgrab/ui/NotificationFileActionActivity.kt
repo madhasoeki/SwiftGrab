@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.core.net.toUri
 import com.example.swiftgrab.util.FileSharingHelper
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /**
  * Activity transparan internal (non-exported) untuk menangani tombol aksi "Buka" dan "Bagikan"
@@ -58,15 +61,24 @@ class NotificationFileActionActivity : ComponentActivity() {
             return action == ACTION_OPEN_FILE || action == ACTION_SHARE_FILE
         }
 
+        internal fun buildActionDataUriString(taskId: String, action: String): String {
+            val encodedTaskId = URLEncoder.encode(taskId, StandardCharsets.UTF_8.name())
+            val encodedAction = URLEncoder.encode(action, StandardCharsets.UTF_8.name())
+            return "swiftgrab://task-action/$encodedTaskId/$encodedAction"
+        }
+
         fun createIntent(
             context: Context,
+            taskId: String,
             action: String,
             filePath: String,
             notificationId: Int
         ): Intent {
+            require(taskId.isNotBlank()) { "Task ID must not be blank" }
             require(isSupportedAction(action)) { "Unsupported file notification action: $action" }
             return Intent(context, NotificationFileActionActivity::class.java).apply {
                 this.action = action
+                data = buildActionDataUriString(taskId, action).toUri()
                 putExtra(EXTRA_FILE_PATH, filePath)
                 putExtra(EXTRA_NOTIFICATION_ID, notificationId)
             }

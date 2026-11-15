@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.example.swiftgrab.R
 import com.example.swiftgrab.SwiftGrabApp
 import com.example.swiftgrab.data.cookies.CookieStorageManager
@@ -668,6 +669,7 @@ class DownloadForegroundService : Service() {
     private fun createActionPendingIntent(action: String, taskId: String): PendingIntent {
         val intent = Intent(this, DownloadActionReceiver::class.java).apply {
             this.action = action
+            data = NotificationFileActionActivity.buildActionDataUriString(taskId, action).toUri()
             putExtra(DownloadActionReceiver.EXTRA_TASK_ID, taskId)
         }
         val requestCode = buildActionRequestCode(taskId, action)
@@ -687,6 +689,7 @@ class DownloadForegroundService : Service() {
     ): PendingIntent {
         val intent = NotificationFileActionActivity.createIntent(
             context = this,
+            taskId = taskId,
             action = action,
             filePath = filePath,
             notificationId = notificationId

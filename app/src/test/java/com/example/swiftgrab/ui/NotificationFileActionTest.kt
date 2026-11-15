@@ -2,6 +2,7 @@ package com.example.swiftgrab.ui
 
 import com.example.swiftgrab.service.DownloadActionReceiver
 import com.example.swiftgrab.service.DownloadForegroundService
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -33,5 +34,28 @@ class NotificationFileActionTest {
         assertNotEquals(openA, shareA)
         assertNotEquals(openA, openB)
         assertNotEquals(openA, pauseA)
+    }
+
+    @Test
+    fun `buildActionDataUriString prevents collisions even when taskId hashCodes match`() {
+        val collidingIdA = "Aa"
+        val collidingIdB = "BB"
+        assertEquals(collidingIdA.hashCode(), collidingIdB.hashCode())
+
+        val uriOpenA = NotificationFileActionActivity.buildActionDataUriString(
+            taskId = collidingIdA,
+            action = NotificationFileActionActivity.ACTION_OPEN_FILE
+        )
+        val uriOpenB = NotificationFileActionActivity.buildActionDataUriString(
+            taskId = collidingIdB,
+            action = NotificationFileActionActivity.ACTION_OPEN_FILE
+        )
+        val uriShareA = NotificationFileActionActivity.buildActionDataUriString(
+            taskId = collidingIdA,
+            action = NotificationFileActionActivity.ACTION_SHARE_FILE
+        )
+
+        assertNotEquals(uriOpenA, uriOpenB)
+        assertNotEquals(uriOpenA, uriShareA)
     }
 }
