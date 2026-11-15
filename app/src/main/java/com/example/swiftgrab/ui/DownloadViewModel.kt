@@ -1,28 +1,21 @@
 package com.example.swiftgrab.ui
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.swiftgrab.SwiftGrabApp
-import com.example.swiftgrab.data.cookies.CookieStorageManager
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
+import com.example.swiftgrab.data.prefs.DownloadPreferences
 import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
-import com.example.swiftgrab.service.DownloadFileManager
-import com.example.swiftgrab.service.DownloadForegroundService
 import com.example.swiftgrab.update.ApkDownloadState
 import com.example.swiftgrab.update.AppUpdateCheckResult
 import com.example.swiftgrab.update.AppUpdateInfo
-import com.example.swiftgrab.update.AppUpdateManager
-import com.example.swiftgrab.util.StorageHelper
 import com.example.swiftgrab.util.UrlValidator
-import com.yausername.youtubedl_android.YoutubeDL
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,18 +68,42 @@ data class DownloadUiState(
     val isUpdateDialogVisible: Boolean = false
 )
 
-class DownloadViewModel(
-    application: Application
+class DownloadViewModel internal constructor(
+    application: Application,
+    private val repository: DownloadRepository,
+    private val preferences: DownloadPreferences,
+    private val engineGateway: DownloadEngineGateway,
+    private val taskDispatcher: DownloadServiceGateway,
+    private val storageGateway: StorageGateway,
+    private val cookieGateway: XCookieGateway,
+    private val updateGateway: AppUpdateGateway,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AndroidViewModel(application) {
 
-    private val app = application as SwiftGrabApp
-    private val repository: DownloadRepository = app.repository
-    private val preferences = app.userPreferences
+    constructor(application: Application) : this(
+        application = application,
+        swiftGrabApp = application as SwiftGrabApp
+    )
+
+    private constructor(
+        application: Application,
+        swiftGrabApp: SwiftGrabApp
+    ) : this(
+        application = application,
+        repository = swiftGrabApp.repository,
+        preferences = swiftGrabApp.userPreferences,
+        engineGateway = AndroidDownloadEngineGateway(swiftGrabApp),
+        taskDispatcher = AndroidDownloadServiceGateway(application),
+        storageGateway = AndroidStorageGateway(application, swiftGrabApp.userPreferences),
+        cookieGateway = AndroidXCookieGateway(application),
+        updateGateway = AndroidAppUpdateGateway(application, swiftGrabApp.userPreferences),
+        ioDispatcher = Dispatchers.IO
+    )
 
     private val _activeFilter = MutableStateFlow(TaskFilter.ALL)
     private val _clipboardSuggestionUrl = MutableStateFlow<String?>(null)
     private val _ytdlUpdateStatus = MutableStateFlow<YtDlpUpdateState>(YtDlpUpdateState.Idle)
-    private val _isXLoggedIn = MutableStateFlow(CookieStorageManager.hasValidXCookies(application))
+    private val _isXLoggedIn = MutableStateFlow(cookieGateway.hasValidXCookies())
     private val _appUpdateState = MutableStateFlow<AppUpdateState>(AppUpdateState.Idle)
     private val _apkDownloadState = MutableStateFlow<ApkDownloadState>(ApkDownloadState.Idle)
     private val _isUpdateDialogVisible = MutableStateFlow(false)
@@ -116,7 +133,7 @@ class DownloadViewModel(
     }
 
     private val stateGroup2 = combine(
-        app.isEngineReady,
+        engineGateway.isEngineReady,
         _ytdlUpdateStatus,
         preferences.settings,
         _isXLoggedIn
@@ -183,14 +200,13 @@ class DownloadViewModel(
     }
 
     fun startDownload(url: String, preset: DownloadPreset) {
-        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+        if (storageGateway.needsLegacyWritePermission(preferences.getCustomDownloadUri())) {
             _pendingLegacyStorageDownload.value = PendingDownloadRequest.Single(url, preset)
             return
         }
         preferences.setLastHandledClipboardUrl(url)
         _clipboardSuggestionUrl.value = null
-        DownloadForegroundService.startDownload(
-            context = getApplication(),
+        taskDispatcher.startDownload(
             url = url,
             preset = preset
         )
@@ -200,7 +216,7 @@ class DownloadViewModel(
         val validUrls = urls.mapNotNull { UrlValidator.extractUrl(it) }.distinct()
         if (validUrls.isEmpty()) return
 
-        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+        if (storageGateway.needsLegacyWritePermission(preferences.getCustomDownloadUri())) {
             _pendingLegacyStorageDownload.value = PendingDownloadRequest.Batch(validUrls, preset)
             return
         }
@@ -209,39 +225,37 @@ class DownloadViewModel(
             preferences.setLastHandledClipboardUrl(currentBannerUrl)
             _clipboardSuggestionUrl.value = null
         }
-        val context: Context = getApplication()
         for (url in validUrls) {
-            DownloadForegroundService.startDownload(context, url, preset)
+            taskDispatcher.startDownload(url = url, preset = preset)
         }
     }
 
     fun pauseTask(taskId: String) {
-        DownloadForegroundService.pause(getApplication(), taskId)
+        taskDispatcher.pause(taskId)
     }
 
     fun resumeTask(taskId: String) {
-        DownloadForegroundService.resume(getApplication(), taskId)
+        taskDispatcher.resume(taskId)
     }
 
     fun cancelTask(taskId: String) {
-        DownloadForegroundService.cancel(getApplication(), taskId)
+        taskDispatcher.cancel(taskId)
     }
 
     fun deleteTask(taskId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            DownloadFileManager.cleanupTemporaryFiles(getApplication(), taskId)
+        viewModelScope.launch(ioDispatcher) {
+            taskDispatcher.cleanupTemporaryFiles(taskId)
             repository.deleteTaskById(taskId)
         }
     }
 
     fun retryTask(task: DownloadTaskEntity) {
-        if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
+        if (storageGateway.needsLegacyWritePermission(preferences.getCustomDownloadUri())) {
             _pendingLegacyStorageDownload.value = PendingDownloadRequest.Retry(task)
             return
         }
         val preset = DownloadPreset.fromTask(task.formatLabel, task.audioOnly)
-        DownloadForegroundService.startDownload(
-            context = getApplication(),
+        taskDispatcher.startDownload(
             url = task.url,
             preset = preset,
             taskId = task.id
@@ -275,11 +289,7 @@ class DownloadViewModel(
      * Mengembalikan versi biner yt-dlp yang terpasang, atau fallback aman jika mesin belum siap.
      */
     fun getYtDlpVersion(): String {
-        return try {
-            YoutubeDL.getInstance().versionName(getApplication()) ?: "Siap"
-        } catch (_: Throwable) {
-            "Siap"
-        }
+        return engineGateway.getYtDlpVersion()
     }
 
     fun setInstantShareMode(enabled: Boolean) {
@@ -299,7 +309,7 @@ class DownloadViewModel(
      * Mengembalikan path fisik atau label tampilan folder jika izin berhasil dipertahankan dan disimpan.
      */
     fun setStorageDirFromUri(uri: Uri): String? {
-        return StorageHelper.saveCustomTreeUri(getApplication(), uri, preferences)
+        return storageGateway.saveCustomTreeUri(uri)
     }
 
     /**
@@ -317,25 +327,14 @@ class DownloadViewModel(
         if (_ytdlUpdateStatus.value is YtDlpUpdateState.Updating) return
         _ytdlUpdateStatus.value = YtDlpUpdateState.Updating
 
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                Log.d("DownloadViewModel", "Starting yt-dlp binary update check...")
-                val engineResult = app.awaitEngineReady()
-                if (engineResult.isFailure) {
-                    val cause = engineResult.exceptionOrNull()
-                    throw cause ?: IllegalStateException("Engine init failed")
+        viewModelScope.launch(ioDispatcher) {
+            engineGateway.updateYtDlp()
+                .onSuccess { currentVersion ->
+                    _ytdlUpdateStatus.value = YtDlpUpdateState.Success(currentVersion)
                 }
-                val context: Context = getApplication()
-                val status = YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE)
-                val currentVersion = YoutubeDL.getInstance().versionName(context) ?: "terbaru"
-                Log.i("DownloadViewModel", "yt-dlp update status: $status, current version: $currentVersion")
-                _ytdlUpdateStatus.value = YtDlpUpdateState.Success(currentVersion)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                Log.e("DownloadViewModel", "Failed to update yt-dlp", t)
-                _ytdlUpdateStatus.value = YtDlpUpdateState.Error(t.message ?: "Gagal memperbarui")
-            }
+                .onFailure { throwable ->
+                    _ytdlUpdateStatus.value = YtDlpUpdateState.Error(throwable.message ?: "Gagal memperbarui")
+                }
         }
     }
 
@@ -358,7 +357,7 @@ class DownloadViewModel(
         _appUpdateState.value = AppUpdateState.Checking
 
         viewModelScope.launch {
-            when (val result = AppUpdateManager.checkForUpdate()) {
+            when (val result = updateGateway.checkForUpdate()) {
                 is AppUpdateCheckResult.UpdateAvailable -> {
                     val currentApkState = _apkDownloadState.value
                     if (currentApkState !is ApkDownloadState.Idle && !currentApkState.matchesRelease(result.info)) {
@@ -370,7 +369,7 @@ class DownloadViewModel(
                     _appUpdateState.value = AppUpdateState.UpdateAvailable(result.info)
                     _isUpdateDialogVisible.value = true
                     if (!manual) {
-                        AppUpdateManager.showUpdateNotification(getApplication(), result.info)
+                        updateGateway.showUpdateNotification(result.info)
                     }
                 }
                 is AppUpdateCheckResult.UpToDate -> {
@@ -412,9 +411,8 @@ class DownloadViewModel(
      * berdasarkan ID unduhan yang tersimpan sebelum proses aplikasi dihentikan sistem.
      */
     private fun restorePersistedApkDownload() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val context: Context = getApplication()
-            val restored = AppUpdateManager.restorePersistedApkDownloadState(context, preferences)
+        viewModelScope.launch(ioDispatcher) {
+            val restored = updateGateway.restorePersistedApkDownloadState()
                 ?: return@launch
             when (restored) {
                 is ApkDownloadState.Downloading -> {
@@ -455,8 +453,7 @@ class DownloadViewModel(
             totalBytes = updateInfo.apkSizeBytes
         )
 
-        val context: Context = getApplication()
-        val enqueueResult = AppUpdateManager.enqueueApkDownload(context, updateInfo, preferences)
+        val enqueueResult = updateGateway.enqueueApkDownload(updateInfo)
         enqueueResult.onFailure { error ->
             activeApkDownloadId = null
             _apkDownloadState.value = ApkDownloadState.Failed(
@@ -480,14 +477,13 @@ class DownloadViewModel(
         releaseTag: String,
         autoLaunchInstaller: Boolean
     ) {
-        val context: Context = getApplication()
         apkDownloadObserverJob?.cancel()
         apkDownloadObserverJob = viewModelScope.launch {
-            AppUpdateManager.observeApkDownload(context, downloadId, releaseTag, preferences).collect { state ->
+            updateGateway.observeApkDownload(downloadId, releaseTag).collect { state ->
                 if (activeApkDownloadId != downloadId) return@collect
                 _apkDownloadState.value = state
                 if (autoLaunchInstaller && state is ApkDownloadState.ReadyToInstall) {
-                    AppUpdateManager.launchApkInstaller(context, state.apkUri)
+                    updateGateway.launchApkInstaller(state.apkUri)
                 }
             }
         }
@@ -499,24 +495,23 @@ class DownloadViewModel(
      */
     fun installDownloadedApk() {
         val availableInfo = (_appUpdateState.value as? AppUpdateState.UpdateAvailable)?.info
-        val context: Context = getApplication()
         when (val state = _apkDownloadState.value) {
             is ApkDownloadState.ReadyToInstall -> {
                 if (availableInfo != null && !state.matchesRelease(availableInfo)) return
-                AppUpdateManager.launchApkInstaller(context, state.apkUri)
+                updateGateway.launchApkInstaller(state.apkUri)
             }
             is ApkDownloadState.PermissionRequired -> {
                 if (availableInfo != null && !state.matchesRelease(availableInfo)) return
-                if (AppUpdateManager.canInstallPackages(context)) {
+                if (updateGateway.canInstallPackages()) {
                     _apkDownloadState.value = ApkDownloadState.ReadyToInstall(
                         downloadId = state.downloadId,
                         releaseTag = state.releaseTag,
                         apkUri = state.apkUri,
                         localFilePath = state.localFilePath
                     )
-                    AppUpdateManager.launchApkInstaller(context, state.apkUri)
+                    updateGateway.launchApkInstaller(state.apkUri)
                 } else {
-                    AppUpdateManager.launchUnknownSourcesSettings(context)
+                    updateGateway.launchUnknownSourcesSettings()
                 }
             }
             else -> Unit
@@ -524,11 +519,11 @@ class DownloadViewModel(
     }
 
     fun openInstallPermissionSettings() {
-        AppUpdateManager.launchUnknownSourcesSettings(getApplication())
+        updateGateway.launchUnknownSourcesSettings()
     }
 
     fun openReleaseOnGitHub(url: String) {
-        AppUpdateManager.openReleasePage(getApplication(), url)
+        updateGateway.openReleasePage(url)
     }
 
     /**
@@ -540,28 +535,23 @@ class DownloadViewModel(
         val availableInfo = (_appUpdateState.value as? AppUpdateState.UpdateAvailable)?.info
         if (availableInfo != null && !state.matchesRelease(availableInfo)) return
 
-        val context: Context = getApplication()
-        if (AppUpdateManager.canInstallPackages(context)) {
+        if (updateGateway.canInstallPackages()) {
             _apkDownloadState.value = ApkDownloadState.ReadyToInstall(
                 downloadId = state.downloadId,
                 releaseTag = state.releaseTag,
                 apkUri = state.apkUri,
                 localFilePath = state.localFilePath
             )
-            AppUpdateManager.launchApkInstaller(context, state.apkUri)
+            updateGateway.launchApkInstaller(state.apkUri)
         }
     }
 
     fun refreshXLoginState() {
-        _isXLoggedIn.value = CookieStorageManager.hasValidXCookies(getApplication())
+        _isXLoggedIn.value = cookieGateway.hasValidXCookies()
     }
 
     fun logoutXAccount() {
-        CookieStorageManager.clearXCookies(getApplication())
-        try {
-            android.webkit.CookieManager.getInstance().removeAllCookies(null)
-            android.webkit.CookieManager.getInstance().flush()
-        } catch (_: Exception) {}
+        cookieGateway.clearXCookies()
         _isXLoggedIn.value = false
     }
 }
