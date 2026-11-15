@@ -51,6 +51,39 @@ object UrlValidator {
     }
 
     /**
+     * Extracts all safe, unique HTTP or HTTPS URLs found in [text] (e.g., multi-line batch input).
+     * Lines starting with forbidden schemes or URLs containing forbidden schemes are ignored.
+     */
+    fun extractUrls(text: String?): List<String> {
+        if (text.isNullOrBlank()) return emptyList()
+
+        val results = LinkedHashSet<String>()
+        for (line in text.lineSequence()) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+
+            val lower = trimmed.lowercase()
+            if (FORBIDDEN_SCHEMES.any { lower.startsWith(it) }) {
+                continue
+            }
+
+            val matcher = WEB_URL_PATTERN.matcher(trimmed)
+            while (matcher.find()) {
+                val prefix = trimmed.substring(0, matcher.start()).lowercase()
+                if (FORBIDDEN_SCHEMES.any { prefix.endsWith(it) }) {
+                    continue
+                }
+                val rawUrl = matcher.group(1) ?: continue
+                val cleaned = cleanTrailingPunctuation(rawUrl)
+                if (isValidWebUrl(cleaned)) {
+                    results.add(cleaned)
+                }
+            }
+        }
+        return results.toList()
+    }
+
+    /**
      * Verifies that the given [url] is a valid HTTP or HTTPS URL and does not contain forbidden schemes.
      */
     fun isValidWebUrl(url: String?): Boolean {

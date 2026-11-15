@@ -19,6 +19,7 @@ import com.example.swiftgrab.update.AppUpdateCheckResult
 import com.example.swiftgrab.update.AppUpdateInfo
 import com.example.swiftgrab.update.AppUpdateManager
 import com.example.swiftgrab.util.StorageHelper
+import com.example.swiftgrab.util.UrlValidator
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -195,13 +196,21 @@ class DownloadViewModel(
     }
 
     fun startBatchDownloads(urls: List<String>, preset: DownloadPreset) {
+        val validUrls = urls.mapNotNull { UrlValidator.extractUrl(it) }.distinct()
+        if (validUrls.isEmpty()) return
+
         if (StorageHelper.needsLegacyWritePermission(getApplication(), preferences.getCustomDownloadUri())) {
-            _pendingLegacyStorageDownload.value = PendingDownloadRequest.Batch(urls, preset)
+            _pendingLegacyStorageDownload.value = PendingDownloadRequest.Batch(validUrls, preset)
             return
         }
+        val currentBannerUrl = _clipboardSuggestionUrl.value
+        if (currentBannerUrl != null && validUrls.contains(currentBannerUrl)) {
+            preferences.setLastHandledClipboardUrl(currentBannerUrl)
+            _clipboardSuggestionUrl.value = null
+        }
         val context: Context = getApplication()
-        for (url in urls) {
-            DownloadForegroundService.startDownload(context, url.trim(), preset)
+        for (url in validUrls) {
+            DownloadForegroundService.startDownload(context, url, preset)
         }
     }
 

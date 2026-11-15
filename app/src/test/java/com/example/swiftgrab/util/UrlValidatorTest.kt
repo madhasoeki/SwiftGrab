@@ -51,6 +51,50 @@ class UrlValidatorTest {
     }
 
     @Test
+    fun `extractUrls extracts multiple unique valid URLs across lines and mixed text`() {
+        val multiLine = """
+            https://youtu.be/dQw4w9WgXcQ?si=abc123
+            
+            Lihat ini: (https://vt.tiktok.com/ZS2abc123/)
+            https://youtu.be/dQw4w9WgXcQ?si=abc123
+            https://www.instagram.com/reel/C8XYZ999/?igsh=123, https://x.com/user/status/456.
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                "https://youtu.be/dQw4w9WgXcQ?si=abc123",
+                "https://vt.tiktok.com/ZS2abc123/",
+                "https://www.instagram.com/reel/C8XYZ999/?igsh=123",
+                "https://x.com/user/status/456"
+            ),
+            UrlValidator.extractUrls(multiLine)
+        )
+    }
+
+    @Test
+    fun `extractUrls skips forbidden schemes while keeping valid URLs`() {
+        val mixed = """
+            file:///storage/emulated/0/Download/test.mp4
+            javascript:https://evil.com/video.mp4
+            foo javascript:https://evil.com/other.mp4
+            https://example.com/?next=file:///etc/passwd
+            https://www.youtube.com/watch?v=valid123
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://www.youtube.com/watch?v=valid123"),
+            UrlValidator.extractUrls(mixed)
+        )
+    }
+
+    @Test
+    fun `extractUrls returns empty list for blank or non-URL text`() {
+        assertTrue(UrlValidator.extractUrls(null).isEmpty())
+        assertTrue(UrlValidator.extractUrls("   \n  ").isEmpty())
+        assertTrue(UrlValidator.extractUrls("Tidak ada tautan sama sekali").isEmpty())
+    }
+
+    @Test
     fun `isValidWebUrl validates host and protocol`() {
         assertTrue(UrlValidator.isValidWebUrl("https://www.youtube.com/watch?v=123"))
         assertTrue(UrlValidator.isValidWebUrl("http://example.org/video.mp4"))
