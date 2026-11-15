@@ -106,7 +106,7 @@ SwiftGrab sepenuhnya kompatibel dengan [Obtainium](https://github.com/ImranR98/O
 
 ### Prasyarat
 * **JDK:** Java 17 terpasang (`java -version`).
-* **Android SDK:** Platform SDK 35 (`compileSdk = 35`, `targetSdk = 35`).
+* **Android SDK:** Platform SDK 37 (`compileSdk = 37`, `targetSdk = 35`).
 * **Git:** Untuk mengklon repositori.
 
 ### Langkah Kompilasi

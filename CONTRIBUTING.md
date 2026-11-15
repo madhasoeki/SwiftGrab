@@ -14,7 +14,7 @@ Terima kasih atas minat Anda untuk berkontribusi pada **SwiftGrab**! Proyek ini 
 
 ## 2. Persyaratan Lingkungan Pengembangan
 * **JDK:** Java 17 (misalnya Eclipse Temurin atau OpenJDK 17).
-* **Android SDK:** `compileSdk = 35`, `targetSdk = 35`, `minSdk = 26` (Android 8.0 Oreo).
+* **Android SDK:** `compileSdk = 37`, `targetSdk = 35`, `minSdk = 26` (Android 8.0 Oreo).
 * **IDE yang Direkomendasikan:** Android Studio Ladybug / Meerkat atau yang lebih baru, atau VS Code dengan ekstensi Android & Kotlin.
 * **Gradle:** Menggunakan Gradle Wrapper bawaan (`./gradlew`).
 
