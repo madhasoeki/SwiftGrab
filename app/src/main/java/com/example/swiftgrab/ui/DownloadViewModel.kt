@@ -13,6 +13,7 @@ import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
+import com.example.swiftgrab.service.DownloadFileManager
 import com.example.swiftgrab.service.DownloadForegroundService
 import com.example.swiftgrab.update.ApkDownloadState
 import com.example.swiftgrab.update.AppUpdateCheckResult
@@ -227,7 +228,8 @@ class DownloadViewModel(
     }
 
     fun deleteTask(taskId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            DownloadFileManager.cleanupTemporaryFiles(getApplication(), taskId)
             repository.deleteTaskById(taskId)
         }
     }
