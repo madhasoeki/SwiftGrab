@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 class SwiftGrabApp : Application() {
@@ -32,7 +33,10 @@ class SwiftGrabApp : Application() {
     private val _isEngineReady = MutableStateFlow(false)
     val isEngineReady: StateFlow<Boolean> = _isEngineReady.asStateFlow()
 
-    private val engineInitDeferred = CompletableDeferred<Result<Unit>>()
+    @Volatile
+    private var engineInitDeferred = CompletableDeferred<Result<Unit>>()
+    @Volatile
+    private var engineInitFailed = false
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -40,10 +44,35 @@ class SwiftGrabApp : Application() {
         instance = this
 
         createNotificationChannels()
-        initDownloadEnginesAsync()
+        initDownloadEnginesAsync(engineInitDeferred)
     }
 
-    suspend fun awaitEngineReady(): Result<Unit> = engineInitDeferred.await()
+    /**
+     * Menunggu kesiapan mesin unduhan (yt-dlp, FFmpeg, dan aria2c), dan melakukan
+     * satu kali percobaan ulang otomatis jika inisialisasi sebelumnya gagal.
+     */
+    suspend fun awaitEngineReady(): Result<Unit> {
+        val result = engineInitDeferred.await()
+        if (result.isFailure) {
+            return retryEngineInit().await()
+        }
+        return result
+    }
+
+    /**
+     * Memicu ulang inisialisasi mesin unduhan secara sinkron dan thread-safe apabila
+     * percobaan sebelumnya telah selesai dengan status gagal.
+     */
+    @Synchronized
+    fun retryEngineInit(): CompletableDeferred<Result<Unit>> {
+        if (engineInitFailed && engineInitDeferred.isCompleted) {
+            engineInitFailed = false
+            val newDeferred = CompletableDeferred<Result<Unit>>()
+            engineInitDeferred = newDeferred
+            initDownloadEnginesAsync(newDeferred)
+        }
+        return engineInitDeferred
+    }
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -68,30 +97,51 @@ class SwiftGrabApp : Application() {
                 setShowBadge(true)
             }
 
-            notificationManager.createNotificationChannels(listOf(progressChannel, completedChannel))
+            val updatesChannel = NotificationChannel(
+                CHANNEL_UPDATES_ID,
+                getString(R.string.notification_channel_updates_name),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = getString(R.string.notification_channel_updates_description)
+                setShowBadge(true)
+            }
+
+            notificationManager.createNotificationChannels(
+                listOf(progressChannel, completedChannel, updatesChannel)
+            )
         }
     }
 
-    private fun initDownloadEnginesAsync() {
+    /**
+     * Mengekstrak dan menginisialisasi biner native YoutubeDL, FFmpeg, dan Aria2c secara asinkron
+     * di dispatcher IO agar tidak memblokir main thread saat aplikasi pertama kali dijalankan.
+     */
+    private fun initDownloadEnginesAsync(deferred: CompletableDeferred<Result<Unit>>) {
         appScope.launch {
             try {
                 Log.d(TAG, "Initializing YoutubeDL, FFmpeg, and Aria2c on Dispatchers.IO...")
                 val startTime = System.currentTimeMillis()
+
+                val nativeDir = File(applicationInfo.nativeLibraryDir)
+                Log.d(TAG, "nativeLibraryDir: ${nativeDir.absolutePath}, exists: ${nativeDir.exists()}")
 
                 YoutubeDL.getInstance().init(this@SwiftGrabApp)
                 FFmpeg.getInstance().init(this@SwiftGrabApp)
                 Aria2c.getInstance().init(this@SwiftGrabApp)
 
                 val elapsed = System.currentTimeMillis() - startTime
+                engineInitFailed = false
                 _isEngineReady.value = true
-                engineInitDeferred.complete(Result.success(Unit))
+                deferred.complete(Result.success(Unit))
                 Log.i(TAG, "Download engines successfully initialized in ${elapsed}ms")
             } catch (e: CancellationException) {
-                engineInitDeferred.complete(Result.failure(e))
+                engineInitFailed = true
+                deferred.complete(Result.failure(e))
                 throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize YoutubeDL/FFmpeg/Aria2c native engines", e)
-                engineInitDeferred.complete(Result.failure(e))
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize YoutubeDL/FFmpeg/Aria2c native engines", t)
+                engineInitFailed = true
+                deferred.complete(Result.failure(t))
             }
         }
     }
@@ -100,6 +150,7 @@ class SwiftGrabApp : Application() {
         const val TAG = "SwiftGrabApp"
         const val CHANNEL_PROGRESS_ID = "download_progress_channel"
         const val CHANNEL_COMPLETE_ID = "download_complete_channel"
+        const val CHANNEL_UPDATES_ID = "app_updates_channel"
 
         val internalTileToken: String = UUID.randomUUID().toString()
 

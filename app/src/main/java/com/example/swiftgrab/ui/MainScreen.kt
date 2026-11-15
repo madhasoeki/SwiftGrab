@@ -1,9 +1,12 @@
 package com.example.swiftgrab.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -53,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,12 +67,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.swiftgrab.BuildConfig
 import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
@@ -76,6 +83,7 @@ import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.ui.components.ClipboardSuggestionBanner
 import com.example.swiftgrab.ui.components.DownloadTaskCard
 import com.example.swiftgrab.ui.components.SettingsBottomSheet
+import com.example.swiftgrab.ui.components.UpdateAvailableDialog
 import com.example.swiftgrab.ui.components.XLoginDialog
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import com.example.swiftgrab.util.UrlValidator
@@ -88,11 +96,63 @@ fun MainRoute(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingLegacyDownload by viewModel.pendingLegacyStorageDownload.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var isXLoginDialogOpen by rememberSaveable { mutableStateOf(false) }
     var isManualDialogOpen by rememberSaveable { mutableStateOf(false) }
     var selectedErrorTask by remember { mutableStateOf<DownloadTaskEntity?>(null) }
+
+    val legacySafPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val display = viewModel.setStorageDirFromUri(uri)
+            if (display != null) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_storage_dir_updated, display),
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.executePendingLegacyStorageDownload()
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_storage_dir_error),
+                    Toast.LENGTH_SHORT
+                ).show()
+                viewModel.clearPendingLegacyStorageDownload()
+            }
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_legacy_storage_denied),
+                Toast.LENGTH_SHORT
+            ).show()
+            viewModel.clearPendingLegacyStorageDownload()
+        }
+    }
+
+    val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.executePendingLegacyStorageDownload()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_legacy_storage_denied),
+                Toast.LENGTH_SHORT
+            ).show()
+            legacySafPickerLauncher.launch(null)
+        }
+    }
+
+    LaunchedEffect(pendingLegacyDownload) {
+        if (pendingLegacyDownload != null) {
+            legacyStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
 
     MainScreen(
         uiState = uiState,
@@ -121,10 +181,17 @@ fun MainRoute(
             ytDlpVersion = viewModel.getYtDlpVersion(),
             updateState = uiState.ytdlUpdateStatus,
             isXLoggedIn = uiState.isXLoggedIn,
+            appUpdateState = uiState.appUpdateState,
+            currentAppVersion = BuildConfig.VERSION_NAME,
             onToggleInstantShare = viewModel::setInstantShareMode,
             onSelectDefaultPreset = viewModel::setDefaultPreset,
             onToggleAutoStartClipboard = viewModel::setAutoStartClipboard,
             onCheckYtDlpUpdate = viewModel::updateYoutubeDL,
+            onCheckAppUpdate = { viewModel.checkForAppUpdate(manual = true) },
+            onShowUpdateDialog = {
+                isSettingsOpen = false
+                viewModel.showUpdateDialogOrCheck()
+            },
             onOpenXLogin = { isXLoginDialogOpen = true },
             onLogoutX = {
                 viewModel.logoutXAccount()
@@ -134,10 +201,55 @@ fun MainRoute(
                     Toast.LENGTH_SHORT
                 ).show()
             },
+            onSelectStorageDirUri = { uri ->
+                val display = viewModel.setStorageDirFromUri(uri)
+                if (display != null) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_updated, display),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onResetStorageDir = {
+                if (viewModel.resetStorageDir()) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_reset),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_storage_dir_reset_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
             onDismiss = {
                 viewModel.resetUpdateStatus()
                 isSettingsOpen = false
             }
+        )
+    }
+
+    val availableUpdate = (uiState.appUpdateState as? AppUpdateState.UpdateAvailable)?.info
+    if (uiState.isUpdateDialogVisible && availableUpdate != null) {
+        UpdateAvailableDialog(
+            updateInfo = availableUpdate,
+            currentVersion = BuildConfig.VERSION_NAME,
+            downloadState = uiState.apkDownloadState,
+            onDownloadAndInstall = { viewModel.startAppUpdateDownload(availableUpdate) },
+            onInstallNow = viewModel::installDownloadedApk,
+            onOpenInstallPermissionSettings = viewModel::openInstallPermissionSettings,
+            onOpenGitHub = { viewModel.openReleaseOnGitHub(availableUpdate.htmlUrl) },
+            onDismiss = viewModel::dismissUpdateDialog
         )
     }
 
@@ -170,6 +282,10 @@ fun MainRoute(
     }
 }
 
+/**
+ * Layar utama aplikasi yang menampilkan daftar unduhan, filter status, saran clipboard,
+ * dan aksi cepat untuk menambah tautan atau membuka pengaturan.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -333,11 +449,20 @@ fun MainScreen(
     }
 }
 
+/**
+ * Lencana indikator kesiapan mesin yt-dlp dan aria2c pada app bar.
+ */
 @Composable
 private fun EngineStatusBadge(
     isReady: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val statusText = if (isReady) {
+        stringResource(R.string.engine_ready)
+    } else {
+        stringResource(R.string.engine_initializing)
+    }
+
     Surface(
         shape = CircleShape,
         color = if (isReady) {
@@ -345,7 +470,9 @@ private fun EngineStatusBadge(
         } else {
             MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
         },
-        modifier = modifier
+        modifier = modifier.semantics(mergeDescendants = true) {
+            contentDescription = statusText
+        }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -361,11 +488,7 @@ private fun EngineStatusBadge(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isReady) {
-                    stringResource(R.string.engine_ready)
-                } else {
-                    stringResource(R.string.engine_initializing)
-                },
+                text = statusText,
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isReady) {
                     MaterialTheme.colorScheme.secondary
@@ -430,6 +553,9 @@ private fun FilterChipRow(
     }
 }
 
+/**
+ * Tampilan kosong ketika tidak ada tugas unduhan yang sesuai dengan filter aktif.
+ */
 @Composable
 private fun EmptyStateView(
     filter: TaskFilter,
@@ -473,23 +599,29 @@ private fun EmptyStateView(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            if (filter == TaskFilter.ALL) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = stringResource(R.string.empty_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+                Text(
+                    text = stringResource(R.string.empty_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
 
+/**
+ * Dialog untuk memasukkan tautan URL unduhan secara manual beserta pemilihan preset format.
+ */
 @Composable
 private fun AddManualUrlDialog(
     defaultPreset: DownloadPreset,
     onDismiss: () -> Unit,
-    onStartDownload: (String, DownloadPreset) -> Unit
+    onStartDownload: (String, DownloadPreset) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var urlText by rememberSaveable { mutableStateOf("") }
     var selectedPreset by rememberSaveable { mutableStateOf(defaultPreset) }
@@ -498,6 +630,7 @@ private fun AddManualUrlDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -556,14 +689,6 @@ private fun AddManualUrlDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = "Pilih Kualitas:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
@@ -618,16 +743,21 @@ private fun AddManualUrlDialog(
     )
 }
 
+/**
+ * Dialog untuk menampilkan log detail kesalahan unduhan dan menyalinnya ke papan klip.
+ */
 @Composable
 private fun TaskErrorDialog(
     task: DownloadTaskEntity,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val fullError = task.errorMessage ?: "Tidak ada log kesalahan yang tercatat."
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = {
             Text(
                 text = stringResource(R.string.error_dialog_title),

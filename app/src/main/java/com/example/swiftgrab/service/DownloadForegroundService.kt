@@ -28,7 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -143,6 +146,7 @@ class DownloadForegroundService : Service() {
     private fun startDownloadJob(task: DownloadTaskEntity) {
         pausedTaskIds.remove(task.id)
         canceledTaskIds.remove(task.id)
+        DownloadFileManager.clearTaskCanceled(task.id)
 
         val job = serviceScope.launch {
             executeDownload(task)
@@ -150,6 +154,10 @@ class DownloadForegroundService : Service() {
         activeJobs[task.id] = job
     }
 
+    /**
+     * Menjalankan proses unduhan yt-dlp dan aria2c untuk satu [DownloadTaskEntity], memperbarui
+     * progres ke Room serta notifikasi foreground secara periodik, dan menangani hasil/error.
+     */
     private suspend fun executeDownload(task: DownloadTaskEntity) {
         val taskId = task.id
         Log.i(TAG, "Starting download execution for task: $taskId (url: ${task.url})")
@@ -177,7 +185,13 @@ class DownloadForegroundService : Service() {
             val app = application as SwiftGrabApp
             val engineResult = app.awaitEngineReady()
             if (engineResult.isFailure) {
-                val err = engineResult.exceptionOrNull()?.message ?: "Engine init failed"
+                val error = engineResult.exceptionOrNull()
+                val rootCause = generateSequence(error) { it.cause }.lastOrNull()
+                val details = listOfNotNull(
+                    error?.message,
+                    rootCause?.takeIf { it != error }?.let { "${it.javaClass.simpleName}: ${it.message}" }
+                ).filter { it.isNotBlank() }.joinToString(" -> ")
+                val err = details.ifBlank { error?.javaClass?.simpleName ?: "Engine init failed" }
                 throw IllegalStateException("Download engine failed to initialize: $err")
             }
 
@@ -242,12 +256,24 @@ class DownloadForegroundService : Service() {
             }
 
             // Download completed successfully
-            val completedFile = DownloadFileManager.finalizeCompletedFile(this, taskId)
-            val finalPath = completedFile?.absolutePath ?: ""
-            val finalSize = completedFile?.length() ?: latestTotalBytes
-            if (completedFile != null && latestTitle == task.url) {
-                val baseName = completedFile.nameWithoutExtension
-                val cleanTitle = if (baseName.contains(" [")) baseName.substringBeforeLast(" [") else baseName
+            val completed = DownloadFileManager.finalizeCompletedMedia(
+                context = this,
+                taskId = taskId,
+                isCanceled = { canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId) }
+            ) ?: throw java.io.IOException("Berkas unduhan selesai tidak ditemukan di direktori staging")
+
+            if (canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId) || !currentCoroutineContext().isActive) {
+                DownloadFileManager.rollbackExportedDownload(this, completed)
+                throw CancellationException("Download canceled after export")
+            }
+
+            val finalPath = completed.outputPath
+            val finalSize = completed.fileSize.takeIf { it > 0L } ?: latestTotalBytes
+            val completedFile = completed.file
+            val completedTitle = completedFile?.nameWithoutExtension
+                ?: completed.displayName.takeIf { it.isNotBlank() }?.let { File(it).nameWithoutExtension }
+            if (completedTitle != null && latestTitle == task.url) {
+                val cleanTitle = if (completedTitle.contains(" [")) completedTitle.substringBeforeLast(" [") else completedTitle
                 if (cleanTitle.isNotBlank()) {
                     latestTitle = cleanTitle
                     repository.updateMetadata(taskId, cleanTitle, task.thumbnailUrl, task.formatLabel)
@@ -255,10 +281,24 @@ class DownloadForegroundService : Service() {
             }
 
             repository.markCompleted(taskId, finalPath, finalSize)
+            if (canceledTaskIds.contains(taskId) || DownloadFileManager.isTaskCanceled(taskId)) {
+                DownloadFileManager.rollbackExportedDownload(this, completed)
+                throw CancellationException("Download canceled during completion persistence")
+            }
+
+            // Pemindaian MediaScannerConnection dipanggil untuk berkas dengan path fisik lokal
+            // agar video/audio langsung otomatis muncul di Galeri HP dan aplikasi Pemutar Musik/Video.
+            // Untuk ekspor SAF dokumen non-lokal (content://), pengindeksan bergantung pada penyedia dokumen SAF terkait.
+            if (completedFile != null && completedFile.exists()) {
+                DownloadFileManager.scanMediaFile(this, completedFile)
+            } else if (finalPath.startsWith("/") && File(finalPath).exists()) {
+                DownloadFileManager.scanMediaPath(this, finalPath)
+            }
+
             showCompletedNotification(taskId, latestTitle, finalPath, finalSize)
             Log.i(TAG, "Download completed for task: $taskId -> $finalPath")
-        } catch (e: Exception) {
-            handleDownloadError(task, e, latestProgress, latestDownloadedBytes, latestTotalBytes)
+        } catch (t: Throwable) {
+            handleDownloadError(task, t, latestProgress, latestDownloadedBytes, latestTotalBytes)
         } finally {
             activeJobs.remove(taskId)
             throttlers.remove(taskId)
@@ -266,9 +306,13 @@ class DownloadForegroundService : Service() {
         }
     }
 
+    /**
+     * Menangani kegagalan atau pembatalan unduhan berdasarkan status jeda/batal pengguna,
+     * cancellation coroutine, maupun error atau exception native dari mesin unduhan.
+     */
     private suspend fun handleDownloadError(
         task: DownloadTaskEntity,
-        e: Exception,
+        t: Throwable,
         lastProgress: Float,
         lastDownloadedBytes: Long,
         lastTotalBytes: Long
@@ -286,14 +330,14 @@ class DownloadForegroundService : Service() {
                 repository.updateStatus(taskId, DownloadStatus.CANCELED)
                 notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
             }
-            e is CancellationException -> {
+            t is CancellationException -> {
                 Log.d(TAG, "Task $taskId coroutine was canceled")
                 repository.updateStatus(taskId, DownloadStatus.PAUSED)
                 updatePausedNotification(taskId, task.title, lastProgress)
             }
             else -> {
-                Log.e(TAG, "Task $taskId failed with exception: ${e.message}", e)
-                val errorMessage = e.message ?: "Download failed"
+                Log.e(TAG, "Task $taskId failed with exception: ${t.message}", t)
+                val errorMessage = t.message ?: "Download failed"
                 repository.updateStatus(taskId, DownloadStatus.FAILED, errorMessage = errorMessage)
                 showFailedNotification(taskId, task.title, errorMessage)
             }
@@ -326,6 +370,7 @@ class DownloadForegroundService : Service() {
     fun resumeTask(taskId: String) {
         pausedTaskIds.remove(taskId)
         canceledTaskIds.remove(taskId)
+        DownloadFileManager.clearTaskCanceled(taskId)
 
         serviceScope.launch {
             repository.updateStatus(taskId, DownloadStatus.QUEUED)
@@ -339,6 +384,7 @@ class DownloadForegroundService : Service() {
     fun cancelTask(taskId: String) {
         canceledTaskIds.add(taskId)
         pausedTaskIds.remove(taskId)
+        DownloadFileManager.markTaskCanceled(taskId)
 
         serviceScope.launch(Dispatchers.IO) {
             try {
@@ -348,7 +394,9 @@ class DownloadForegroundService : Service() {
                 Log.e(TAG, "Error destroying process on cancel: $taskId", e)
             }
             val job = activeJobs.remove(taskId)
-            job?.cancel()
+            try {
+                job?.cancelAndJoin()
+            } catch (_: CancellationException) {}
 
             DownloadFileManager.cleanupTemporaryFiles(this@DownloadForegroundService, taskId)
             repository.updateStatus(taskId, DownloadStatus.CANCELED)
@@ -497,11 +545,16 @@ class DownloadForegroundService : Service() {
     private fun showCompletedNotification(taskId: String, title: String, filePath: String, fileSize: Long) {
         val openAppPendingIntent = createOpenAppPendingIntent()
         val sizeFormatted = if (fileSize > 0) " • ${formatBytes(fileSize)}" else ""
+        val fallbackName = if (filePath.startsWith("content://")) {
+            filePath.substringAfterLast("%2F").substringAfterLast("/")
+        } else {
+            File(filePath).name
+        }
 
         val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(getString(R.string.download_completed))
-            .setContentText("${title.ifBlank { File(filePath).name }}$sizeFormatted")
+            .setContentText("${title.ifBlank { fallbackName }}$sizeFormatted")
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

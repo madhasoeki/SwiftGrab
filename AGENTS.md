@@ -6,7 +6,7 @@ Dokumen `AGENTS.md` ini mengikuti standar terbuka [AGENTS.md](https://agents.md/
 * **Nama Aplikasi:** SwiftGrab (`com.example.swiftgrab`)
 * **Deskripsi Singkat:** Aplikasi Android pengunduh video dan audio bebas iklan (*zero-ads, zero-tracking*) berbasis [yt-dlp](https://github.com/yt-dlp/yt-dlp), [yausername/youtubedl-android](https://github.com/yausername/youtubedl-android), dan [aria2c](https://github.com/aria2/aria2) yang mendukung *background download*, *pause/resume*, serta unduhan instan tanpa *paste* manual (*Zero-Paste Share Sheet & Auto-Clipboard*).
 * **Target SDK:** `minSdk = 26` (Android 8.0), `targetSdk = 35` / `compileSdk = 35` (Android 15).
-* **Referensi Arsitektur Utama:** Mengadopsi praktik terbaik dari proyek *open-source* [JunkFood02/Seal](https://github.com/junkfood02/Seal) dan [deniscerri/ytdlnis](https://github.com/deniscerri/ytdlnis).
+* **Referensi Arsitektur Utama:** Mengadopsi blueprint implementasi di [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) dan praktik terbaik dari proyek *open-source* [JunkFood02/Seal](https://github.com/junkfood02/Seal) dan [deniscerri/ytdlnis](https://github.com/deniscerri/ytdlnis).
 
 ## 2. Perintah Build, Lint, dan Verifikasi (Terminal Commands)
 Saat menyelesaikan perubahan kode, jalankan perintah berikut untuk memastikan tidak ada regresi kompilasi:
