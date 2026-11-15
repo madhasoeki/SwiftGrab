@@ -23,6 +23,8 @@
     <string name="toast_invalid_url">SwiftGrab: Tidak ditemukan tautan video yang valid</string>
     <string name="toast_clipboard_empty">SwiftGrab: Papan klip tidak berisi tautan yang valid</string>
     <string name="format_sheet_title">Pilihan Format Unduhan</string>
+    <string name="format_sheet_loading_metadata">Mengambil info media…</string>
+    <string name="format_sheet_metadata_unavailable">Pratinjau tidak tersedia, siap diunduh</string>
     <string name="btn_start_download">Mulai Unduh</string>
     <string name="btn_start_batch_download">Unduh %d Tautan</string>
     <string name="btn_cancel">Batal</string>

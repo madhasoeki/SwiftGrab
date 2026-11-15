@@ -70,6 +70,13 @@ class SwiftGrabApp : Application() {
         }
     }
 
+    internal fun destroyProcessAsync(processId: String) {
+        appScope.launch {
+            runCatching { YoutubeDL.getInstance().destroyProcessById(processId) }
+                .onFailure { Log.d(TAG, "destroyProcessAsync ignored for $processId: ${it.message}") }
+        }
+    }
+
     internal fun pauseInterruptedDownloadsAsync(taskIds: List<String>) {
         if (taskIds.isEmpty()) return
         appScope.launch {

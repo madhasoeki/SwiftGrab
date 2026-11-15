@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Card
@@ -38,15 +39,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -54,6 +64,7 @@ import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.repository.LiveProgress
+import com.example.swiftgrab.service.MediaMetadataExtractor
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import java.util.Locale
 
@@ -108,7 +119,15 @@ fun DownloadTaskCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    FormatBadge(label = task.formatLabel, audioOnly = task.audioOnly)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FormatBadge(label = task.formatLabel, audioOnly = task.audioOnly)
+                        if (task.durationSeconds > 0L) {
+                            DurationBadge(durationSeconds = task.durationSeconds)
+                        }
+                    }
                 }
             }
 
@@ -203,6 +222,12 @@ private fun MediaThumbnail(
     audioOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val fallbackPainter = rememberCenteredIconPainter(
+        imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
+        iconSize = 20.dp,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
     Box(
         modifier = modifier
             .size(width = 64.dp, height = 36.dp)
@@ -210,22 +235,84 @@ private fun MediaThumbnail(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
-        if (!thumbnailUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-        } else {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(thumbnailUrl?.takeIf { it.isNotBlank() })
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            placeholder = fallbackPainter,
+            error = fallbackPainter,
+            fallback = fallbackPainter,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize()
+        )
+    }
+}
+
+@Composable
+private fun rememberCenteredIconPainter(
+    imageVector: ImageVector,
+    iconSize: Dp,
+    tint: Color
+): Painter {
+    val vectorPainter = rememberVectorPainter(image = imageVector)
+    val density = LocalDensity.current
+    val iconSizePx = with(density) { iconSize.toPx() }
+    val colorFilter = remember(tint) { ColorFilter.tint(tint) }
+
+    return remember(vectorPainter, iconSizePx, colorFilter) {
+        object : Painter() {
+            override val intrinsicSize: Size = Size.Unspecified
+
+            override fun DrawScope.onDraw() {
+                val targetSize = minOf(iconSizePx, size.width, size.height)
+                val dx = (size.width - targetSize) / 2f
+                val dy = (size.height - targetSize) / 2f
+                translate(left = dx, top = dy) {
+                    with(vectorPainter) {
+                        draw(
+                            size = Size(targetSize, targetSize),
+                            colorFilter = colorFilter
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DurationBadge(
+    durationSeconds: Long,
+    modifier: Modifier = Modifier
+) {
+    val formatted = MediaMetadataExtractor.formatDuration(durationSeconds)
+    if (formatted.isEmpty()) return
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
             Icon(
-                imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
+                imageVector = Icons.Rounded.Schedule,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = formatted,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -522,6 +609,7 @@ private fun DownloadTaskCardDownloadingPreview() {
                 id = "1",
                 url = "https://youtube.com/watch?v=demo",
                 title = "Amazing Nature 4K HDR Documentary Sample",
+                durationSeconds = 185L,
                 formatLabel = "MP4 1080p",
                 status = DownloadStatus.DOWNLOADING,
                 progress = 68.4f,
@@ -551,6 +639,7 @@ private fun DownloadTaskCardPausedPreview() {
                 id = "2",
                 url = "https://youtube.com/watch?v=demo2",
                 title = "Cyberpunk Music Mix 2026 Synthwave",
+                durationSeconds = 3725L,
                 formatLabel = "MP3",
                 audioOnly = true,
                 status = DownloadStatus.PAUSED,

@@ -121,15 +121,17 @@ class DownloadViewModelTest {
             id: String,
             title: String,
             thumbnailUrl: String?,
+            durationSeconds: Long,
             formatLabel: String,
             updatedAt: Long
         ) {
             val current = tasks.value[id] ?: return
             tasks.value = tasks.value + (
                 id to current.copy(
-                    title = title,
-                    thumbnailUrl = thumbnailUrl,
-                    formatLabel = formatLabel,
+                    title = title.ifEmpty { current.title },
+                    thumbnailUrl = thumbnailUrl ?: current.thumbnailUrl,
+                    durationSeconds = if (durationSeconds > 0L) durationSeconds else current.durationSeconds,
+                    formatLabel = formatLabel.ifEmpty { current.formatLabel },
                     updatedAt = updatedAt
                 )
             )

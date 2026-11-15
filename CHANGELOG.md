@@ -9,6 +9,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ## [Unreleased]
 
 ### Ditambahkan
+- Pengambilan metadata & thumbnail media asinkron (`MediaMetadataExtractor`) menggunakan `yt-dlp --dump-single-json --no-download` untuk mengisi judul asli, `thumbnailUrl`, dan durasi media (`durationSeconds`) pada kartu unduhan (`DownloadTaskCard`) serta pratinjau langsung di `QuickFormatSheet`.
+- Migrasi skema Room Database (`v1` ke `v2`) untuk menambahkan kolom `durationSeconds` pada tabel `download_tasks`.
 - Tombol aksi **Buka** dan **Bagikan** langsung pada notifikasi unduhan selesai (`showCompletedNotification`) melalui `NotificationFileActionActivity` dan `FileSharingHelper`.
 
 ### Diubah

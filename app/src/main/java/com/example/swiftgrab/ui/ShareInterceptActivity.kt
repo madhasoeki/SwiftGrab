@@ -14,14 +14,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import com.example.swiftgrab.R
 import com.example.swiftgrab.SwiftGrabApp
+import com.example.swiftgrab.data.cookies.CookieStorageManager
 import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.service.DownloadForegroundService
+import com.example.swiftgrab.service.MediaMetadata
+import com.example.swiftgrab.service.MediaMetadataExtractor
+import com.example.swiftgrab.ui.components.QuickFormatMetadataState
 import com.example.swiftgrab.ui.components.QuickFormatSheet
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import com.example.swiftgrab.util.StorageHelper
 import com.example.swiftgrab.util.UrlValidator
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 
 /**
  * Transparent activity that captures ACTION_SEND intents and Quick Settings clipboard triggers.
@@ -34,17 +43,24 @@ class ShareInterceptActivity : ComponentActivity() {
     private var pendingClipboardRead = false
     private var activeUrl by mutableStateOf<String?>(null)
     private var selectedPreset by mutableStateOf(DownloadPreset.BEST_VIDEO)
+    private var metadataState by mutableStateOf<QuickFormatMetadataState>(QuickFormatMetadataState.Loading)
     private var contentInitialized = false
+
+    private var metadataJob: Job? = null
+    private var activePreviewProcessId: String? = null
 
     private var pendingLegacyUrl: String? = null
     private var pendingLegacyPreset: DownloadPreset? = null
+    private var pendingLegacyMetadata: MediaMetadata? = null
 
     private val legacySafPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             val url = pendingLegacyUrl
             val preset = pendingLegacyPreset ?: DownloadPreset.BEST_VIDEO
+            val metadata = pendingLegacyMetadata
             pendingLegacyUrl = null
             pendingLegacyPreset = null
+            pendingLegacyMetadata = null
 
             if (uri != null && url != null) {
                 val prefs = (application as SwiftGrabApp).userPreferences
@@ -55,7 +71,7 @@ class ShareInterceptActivity : ComponentActivity() {
                         getString(R.string.toast_storage_dir_updated, display),
                         Toast.LENGTH_SHORT
                     ).show()
-                    dispatchDownloadAndFinish(url, preset)
+                    dispatchDownloadAndFinish(url, preset, metadata)
                     return@registerForActivityResult
                 }
                 Toast.makeText(
@@ -77,14 +93,17 @@ class ShareInterceptActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             val url = pendingLegacyUrl
             val preset = pendingLegacyPreset ?: DownloadPreset.BEST_VIDEO
+            val metadata = pendingLegacyMetadata
             if (url == null) {
+                pendingLegacyMetadata = null
                 finish()
                 return@registerForActivityResult
             }
             if (isGranted) {
                 pendingLegacyUrl = null
                 pendingLegacyPreset = null
-                dispatchDownloadAndFinish(url, preset)
+                pendingLegacyMetadata = null
+                dispatchDownloadAndFinish(url, preset, metadata)
             } else {
                 Toast.makeText(
                     this,
@@ -197,6 +216,7 @@ class ShareInterceptActivity : ComponentActivity() {
     private fun showFormatSheet(url: String, defaultPreset: DownloadPreset) {
         activeUrl = url
         selectedPreset = defaultPreset
+        startPreviewMetadataFetch(url)
 
         if (!contentInitialized) {
             contentInitialized = true
@@ -207,11 +227,17 @@ class ShareInterceptActivity : ComponentActivity() {
                         QuickFormatSheet(
                             url = currentUrl,
                             selectedPreset = selectedPreset,
+                            metadataState = metadataState,
                             onSelectPreset = { selectedPreset = it },
                             onStartDownload = {
-                                startDownloadAndFinish(currentUrl, selectedPreset)
+                                val resolvedMetadata = (metadataState as? QuickFormatMetadataState.Loaded)?.metadata
+                                cancelPreviewMetadataFetch()
+                                startDownloadAndFinish(currentUrl, selectedPreset, resolvedMetadata)
                             },
-                            onDismiss = { finish() }
+                            onDismiss = {
+                                cancelPreviewMetadataFetch()
+                                finish()
+                            }
                         )
                     }
                 }
@@ -219,23 +245,80 @@ class ShareInterceptActivity : ComponentActivity() {
         }
     }
 
-    private fun startDownloadAndFinish(url: String, preset: DownloadPreset) {
+    private fun startPreviewMetadataFetch(url: String) {
+        cancelPreviewMetadataFetch()
+        metadataState = QuickFormatMetadataState.Loading
+        val processId = "preview_${UUID.randomUUID()}"
+        activePreviewProcessId = processId
+
+        metadataJob = lifecycleScope.launch {
+            val app = application as SwiftGrabApp
+            val cookiesFile = CookieStorageManager.getXCookiesFile(this@ShareInterceptActivity)
+            val result = withTimeoutOrNull(PREVIEW_METADATA_TIMEOUT_MS) {
+                MediaMetadataExtractor.fetch(
+                    app = app,
+                    url = url,
+                    cookiesFile = cookiesFile,
+                    processId = processId
+                )
+            }
+            if (activePreviewProcessId == processId) {
+                activePreviewProcessId = null
+            }
+            if (activeUrl == url) {
+                metadataState = if (result != null) {
+                    QuickFormatMetadataState.Loaded(result)
+                } else {
+                    QuickFormatMetadataState.Unavailable
+                }
+            }
+        }
+    }
+
+    private fun cancelPreviewMetadataFetch() {
+        metadataJob?.cancel()
+        metadataJob = null
+        val processId = activePreviewProcessId
+        activePreviewProcessId = null
+        if (processId != null) {
+            (application as? SwiftGrabApp)?.destroyProcessAsync(processId)
+        }
+    }
+
+    override fun onDestroy() {
+        cancelPreviewMetadataFetch()
+        super.onDestroy()
+    }
+
+    private fun startDownloadAndFinish(
+        url: String,
+        preset: DownloadPreset,
+        metadata: MediaMetadata? = null
+    ) {
         val prefs = (application as SwiftGrabApp).userPreferences
         if (StorageHelper.needsLegacyWritePermission(this, prefs.getCustomDownloadUri())) {
             activeUrl = null
             pendingLegacyUrl = url
             pendingLegacyPreset = preset
+            pendingLegacyMetadata = metadata
             legacyStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             return
         }
-        dispatchDownloadAndFinish(url, preset)
+        dispatchDownloadAndFinish(url, preset, metadata)
     }
 
-    private fun dispatchDownloadAndFinish(url: String, preset: DownloadPreset) {
+    private fun dispatchDownloadAndFinish(
+        url: String,
+        preset: DownloadPreset,
+        metadata: MediaMetadata? = null
+    ) {
         DownloadForegroundService.startDownload(
             context = this,
             url = url,
-            preset = preset
+            preset = preset,
+            title = metadata?.title,
+            thumbnailUrl = metadata?.thumbnailUrl,
+            durationSeconds = metadata?.durationSeconds ?: 0L
         )
         val domain = UrlValidator.extractDomain(url)
         Toast.makeText(
@@ -248,6 +331,7 @@ class ShareInterceptActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "ShareInterceptActivity"
+        private const val PREVIEW_METADATA_TIMEOUT_MS = 12_000L
         const val ACTION_CLIPBOARD_DOWNLOAD = "com.example.swiftgrab.action.CLIPBOARD_DOWNLOAD"
         const val EXTRA_FORCE_FORMAT_SHEET = "extra_force_format_sheet"
         const val EXTRA_INTERNAL_TOKEN = "extra_internal_token"
