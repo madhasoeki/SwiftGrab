@@ -107,7 +107,68 @@ jobs:
           cat checksums.txt
           cd ..
 
-      - name: Publish to GitHub Releases
+      - name: Extract Release Notes from CHANGELOG.md
+        id: notes
+        env:
+          RELEASE_TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"].strip()
+          version = tag[1:] if tag.startswith(("v", "V")) else tag
+          changelog_path = Path("CHANGELOG.md")
+          out_path = Path(os.environ["RUNNER_TEMP"]) / "release_notes.md"
+          github_output = Path(os.environ["GITHUB_OUTPUT"])
+
+          found = False
+          if changelog_path.is_file():
+              lines = changelog_path.read_text(encoding="utf-8").splitlines()
+              header_re = re.compile(
+                  rf"^##\s+\[?v?{re.escape(version)}\]?(?:\s|$)",
+                  re.IGNORECASE,
+              )
+              ref_re = re.compile(r"^\[[^\]]+\]:\s*https?://")
+
+              capturing = False
+              captured = []
+              for line in lines:
+                  if not capturing:
+                      if header_re.match(line):
+                          capturing = True
+                  else:
+                      if line.startswith("## ") or ref_re.match(line):
+                          break
+                      captured.append(line)
+
+              body = "\n".join(captured).strip()
+              if body:
+                  out_path.write_text(body + "\n", encoding="utf-8")
+                  found = True
+
+          with github_output.open("a", encoding="utf-8") as fh:
+              fh.write(f"found={'true' if found else 'false'}\n")
+          print(f"CHANGELOG entry for {version} found: {found}")
+          EOF
+
+      - name: Publish to GitHub Releases (CHANGELOG)
+        if: steps.notes.outputs.found == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: SwiftGrab ${{ steps.vars.outputs.tag }}
+          body_path: ${{ runner.temp }}/release_notes.md
+          files: |
+            release-assets/*.apk
+            release-assets/checksums.txt
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+
+      - name: Publish to GitHub Releases (Auto Notes)
+        if: steps.notes.outputs.found != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
