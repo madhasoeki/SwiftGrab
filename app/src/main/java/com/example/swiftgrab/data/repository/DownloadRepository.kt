@@ -89,6 +89,26 @@ class DownloadRepository(
         downloadDao.updateStatus(id, status, errorMessage)
     }
 
+    /**
+     * Memulihkan tugas berstatus [DownloadStatus.DOWNLOADING] yang terhenti akibat crash atau force-kill
+     * menjadi [DownloadStatus.PAUSED] agar berkas sementara (.part/.aria2) dapat langsung dilanjutkan.
+     */
+    suspend fun reconcileInterruptedDownloads(activeTaskIds: Set<String> = emptySet()): Int {
+        if (activeTaskIds.isEmpty()) {
+            return downloadDao.reconcileDownloadingTasksToPaused()
+        }
+        val stuckTasks = downloadDao.getTasksByStatus(DownloadStatus.DOWNLOADING)
+            .filter { it.id !in activeTaskIds }
+        var recoveredCount = 0
+        for (task in stuckTasks) {
+            recoveredCount += downloadDao.reconcileDownloadingTaskToPaused(task.id)
+        }
+        return recoveredCount
+    }
+
+    suspend fun reconcileInterruptedDownload(id: String): Int =
+        downloadDao.reconcileDownloadingTaskToPaused(id)
+
     suspend fun markCompleted(id: String, outputPath: String, totalBytes: Long) {
         downloadDao.markCompleted(id = id, outputPath = outputPath, totalBytes = totalBytes)
     }

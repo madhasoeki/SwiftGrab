@@ -37,6 +37,7 @@ class SwiftGrabApp : Application() {
     private var engineInitDeferred = CompletableDeferred<Result<Unit>>()
     @Volatile
     private var engineInitFailed = false
+    private val startupReconciliationDeferred = CompletableDeferred<Unit>()
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -44,7 +45,41 @@ class SwiftGrabApp : Application() {
         instance = this
 
         createNotificationChannels()
+        reconcileInterruptedDownloadsAsync()
         initDownloadEnginesAsync(engineInitDeferred)
+    }
+
+    suspend fun awaitStartupReconciliation() {
+        startupReconciliationDeferred.await()
+    }
+
+    private fun reconcileInterruptedDownloadsAsync() {
+        appScope.launch {
+            try {
+                val recovered = repository.reconcileInterruptedDownloads()
+                if (recovered > 0) {
+                    Log.i(TAG, "Recovered $recovered interrupted DOWNLOADING task(s) to PAUSED on startup")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to reconcile interrupted downloads on startup", t)
+            } finally {
+                startupReconciliationDeferred.complete(Unit)
+            }
+        }
+    }
+
+    internal fun pauseInterruptedDownloadsAsync(taskIds: List<String>) {
+        if (taskIds.isEmpty()) return
+        appScope.launch {
+            for (taskId in taskIds) {
+                runCatching { YoutubeDL.getInstance().destroyProcessById(taskId) }
+                    .onFailure { Log.w(TAG, "Failed to destroy process on service destroy for $taskId", it) }
+                runCatching { repository.reconcileInterruptedDownload(taskId) }
+                    .onFailure { Log.e(TAG, "Failed to pause interrupted task $taskId on service destroy", it) }
+            }
+        }
     }
 
     /**
