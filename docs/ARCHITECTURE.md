@@ -97,7 +97,7 @@ dependencyResolutionManagement {
 // Di app/build.gradle.kts:
 android {
     namespace = "com.example.swiftgrab"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.swiftgrab"

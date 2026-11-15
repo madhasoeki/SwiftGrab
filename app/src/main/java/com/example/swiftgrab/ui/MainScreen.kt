@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -98,6 +99,7 @@ fun MainRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pendingLegacyDownload by viewModel.pendingLegacyStorageDownload.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var isXLoginDialogOpen by rememberSaveable { mutableStateOf(false) }
     var isManualDialogOpen by rememberSaveable { mutableStateOf(false) }
@@ -111,14 +113,14 @@ fun MainRoute(
             if (display != null) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_storage_dir_updated, display),
+                    resources.getString(R.string.toast_storage_dir_updated, display),
                     Toast.LENGTH_SHORT
                 ).show()
                 viewModel.executePendingLegacyStorageDownload()
             } else {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_storage_dir_error),
+                    resources.getString(R.string.toast_storage_dir_error),
                     Toast.LENGTH_SHORT
                 ).show()
                 viewModel.clearPendingLegacyStorageDownload()
@@ -126,7 +128,7 @@ fun MainRoute(
         } else {
             Toast.makeText(
                 context,
-                context.getString(R.string.toast_legacy_storage_denied),
+                resources.getString(R.string.toast_legacy_storage_denied),
                 Toast.LENGTH_SHORT
             ).show()
             viewModel.clearPendingLegacyStorageDownload()
@@ -141,7 +143,7 @@ fun MainRoute(
         } else {
             Toast.makeText(
                 context,
-                context.getString(R.string.toast_legacy_storage_denied),
+                resources.getString(R.string.toast_legacy_storage_denied),
                 Toast.LENGTH_SHORT
             ).show()
             legacySafPickerLauncher.launch(null)
@@ -197,7 +199,7 @@ fun MainRoute(
                 viewModel.logoutXAccount()
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_x_logout_success),
+                    resources.getString(R.string.toast_x_logout_success),
                     Toast.LENGTH_SHORT
                 ).show()
             },
@@ -206,13 +208,13 @@ fun MainRoute(
                 if (display != null) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_storage_dir_updated, display),
+                        resources.getString(R.string.toast_storage_dir_updated, display),
                         Toast.LENGTH_SHORT
                     ).show()
                 } else {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_storage_dir_error),
+                        resources.getString(R.string.toast_storage_dir_error),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -221,13 +223,13 @@ fun MainRoute(
                 if (viewModel.resetStorageDir()) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_storage_dir_reset),
+                        resources.getString(R.string.toast_storage_dir_reset),
                         Toast.LENGTH_SHORT
                     ).show()
                 } else {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_storage_dir_reset_error),
+                        resources.getString(R.string.toast_storage_dir_reset_error),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -632,6 +634,7 @@ private fun AddManualUrlDialog(
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val detectedUrls = remember(urlText) { UrlValidator.extractUrls(urlText) }
     val context = LocalContext.current
+    val resources = LocalResources.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -742,7 +745,7 @@ private fun AddManualUrlDialog(
                 onClick = {
                     val safeUrls = UrlValidator.extractUrls(urlText)
                     if (safeUrls.isEmpty()) {
-                        errorMessage = context.getString(R.string.manual_dialog_error)
+                        errorMessage = resources.getString(R.string.manual_dialog_error)
                     } else {
                         onStartDownloads(safeUrls, selectedPreset)
                     }
