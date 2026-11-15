@@ -224,6 +224,10 @@ class DownloadForegroundService : Service() {
 
             withContext(Dispatchers.IO) {
                 YoutubeDL.getInstance().execute(request, taskId) { progress, etaSeconds, line ->
+                    if (pausedTaskIds.contains(taskId) || canceledTaskIds.contains(taskId)) {
+                        return@execute
+                    }
+
                     val parsed = DownloadProgressParser.parse(
                         callbackProgress = progress,
                         callbackEtaSeconds = etaSeconds,
@@ -261,16 +265,14 @@ class DownloadForegroundService : Service() {
                     }
 
                     if (throttler.shouldUpdate()) {
-                        serviceScope.launch {
-                            repository.updateProgress(
-                                id = taskId,
-                                progress = latestProgress,
-                                downloadedBytes = latestDownloadedBytes,
-                                totalBytes = latestTotalBytes,
-                                speed = latestSpeed,
-                                eta = latestEta
-                            )
-                        }
+                        repository.updateLiveProgress(
+                            id = taskId,
+                            progress = latestProgress,
+                            downloadedBytes = latestDownloadedBytes,
+                            totalBytes = latestTotalBytes,
+                            speed = latestSpeed,
+                            eta = latestEta
+                        )
                         updateForegroundProgressNotification(
                             taskId = taskId,
                             title = latestTitle,

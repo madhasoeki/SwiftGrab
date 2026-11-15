@@ -13,6 +13,7 @@ import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.prefs.SwiftGrabSettings
 import com.example.swiftgrab.data.repository.DownloadRepository
+import com.example.swiftgrab.data.repository.LiveProgress
 import com.example.swiftgrab.service.DownloadFileManager
 import com.example.swiftgrab.service.DownloadForegroundService
 import com.example.swiftgrab.update.ApkDownloadState
@@ -92,6 +93,8 @@ class DownloadViewModel(
     private val _isUpdateDialogVisible = MutableStateFlow(false)
     private val _pendingLegacyStorageDownload = MutableStateFlow<PendingDownloadRequest?>(null)
     val pendingLegacyStorageDownload: StateFlow<PendingDownloadRequest?> = _pendingLegacyStorageDownload.asStateFlow()
+
+    val liveProgress: StateFlow<Map<String, LiveProgress>> = repository.liveProgress
 
     private var hasAutoCheckedAppUpdate = false
     private var apkDownloadObserverJob: Job? = null

@@ -9,6 +9,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ## [Unreleased]
 
 ### Diubah
+- Isolasi rekomposisi progres unduhan pada `LazyColumn` dengan memindahkan progres langsung (*progress*, *speed*, *ETA*, *bytes*) ke `StateFlow<Map<String, LiveProgress>>` di memori dan pembacaan *deferred* di `DownloadTaskCard` agar `MainScreen`, `FilterChipRow`, thumbnail, dan tombol aksi tidak ikut direkomposisi setiap 250 ms.
 - Otomatisasi review Pull Request menggunakan PR-Agent (`the-pr-agent/pr-agent`) melalui gateway OpenAI-compatible.
 - Integrasi `CHANGELOG.md` ke workflow `Release APK` agar catatan rilis di GitHub Releases dan dialog pembaruan aplikasi lebih rapi.
 

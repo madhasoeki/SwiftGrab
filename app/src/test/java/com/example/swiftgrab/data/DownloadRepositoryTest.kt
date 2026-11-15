@@ -4,10 +4,14 @@ import com.example.swiftgrab.data.db.DownloadDao
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.repository.DownloadRepository
+import com.example.swiftgrab.data.repository.LiveProgress
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -329,5 +333,117 @@ class DownloadRepositoryTest {
 
         // Calling reconcileInterruptedDownload on a non-DOWNLOADING task must be a no-op
         assertEquals(0, repo.reconcileInterruptedDownload("orphaned-1"))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `updateLiveProgress updates in-memory flow without re-emitting allTasks and flushes on pause`() = runTest {
+        val repo = DownloadRepository(FakeDownloadDao())
+        repo.createTask(
+            id = "live-1",
+            url = "https://example.com/live",
+            title = "Live Video"
+        )
+        repo.updateStatus("live-1", DownloadStatus.DOWNLOADING)
+
+        var allTasksEmissions = 0
+        val collectorJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            repo.allTasks.collect { allTasksEmissions++ }
+        }
+
+        val initialEmissions = allTasksEmissions
+        assertEquals(1, initialEmissions)
+
+        repo.updateLiveProgress(
+            id = "live-1",
+            progress = 33.3f,
+            downloadedBytes = 333_000L,
+            totalBytes = 1_000_000L,
+            speed = "6.5 MB/s",
+            eta = "00:10"
+        )
+        repo.updateLiveProgress(
+            id = "live-1",
+            progress = 67.5f,
+            downloadedBytes = 675_000L,
+            totalBytes = 1_000_000L,
+            speed = "7.2 MB/s",
+            eta = "00:05"
+        )
+
+        // Room allTasks must NOT re-emit on live progress ticks
+        assertEquals(initialEmissions, allTasksEmissions)
+        assertEquals(
+            LiveProgress(
+                progress = 67.5f,
+                downloadedBytes = 675_000L,
+                totalBytes = 1_000_000L,
+                speed = "7.2 MB/s",
+                eta = "00:05"
+            ),
+            repo.liveProgress.value["live-1"]
+        )
+
+        // Pausing flushes latest progress to Room and clears the live entry
+        repo.updateStatus("live-1", DownloadStatus.PAUSED)
+        assertNull(repo.liveProgress.value["live-1"])
+
+        val pausedTask = repo.getTask("live-1")
+        assertEquals(DownloadStatus.PAUSED, pausedTask?.status)
+        assertEquals(67.5f, pausedTask?.progress)
+        assertEquals(675_000L, pausedTask?.downloadedBytes)
+        assertEquals(1_000_000L, pausedTask?.totalBytes)
+        assertEquals("", pausedTask?.speed)
+        assertEquals("", pausedTask?.eta)
+
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `markCompleted, deleteTaskById, and reconcileInterruptedDownloads manage liveProgress entries`() = runTest {
+        val dao = FakeDownloadDao()
+        val repo = DownloadRepository(dao)
+
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "t-complete",
+                url = "https://example.com/1",
+                title = "Complete Me",
+                status = DownloadStatus.DOWNLOADING
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "t-orphan",
+                url = "https://example.com/2",
+                title = "Orphan",
+                status = DownloadStatus.DOWNLOADING
+            )
+        )
+        dao.upsertTask(
+            DownloadTaskEntity(
+                id = "t-active",
+                url = "https://example.com/3",
+                title = "Active",
+                status = DownloadStatus.DOWNLOADING
+            )
+        )
+
+        repo.updateLiveProgress("t-complete", 95f, 950L, 1000L, "5 MB/s", "00:01")
+        repo.updateLiveProgress("t-orphan", 44f, 440L, 1000L, "4 MB/s", "00:10")
+        repo.updateLiveProgress("t-active", 12f, 120L, 1000L, "2 MB/s", "00:30")
+
+        repo.markCompleted("t-complete", "/sdcard/Download/out.mp4", 1000L)
+        assertNull(repo.liveProgress.value["t-complete"])
+
+        val recovered = repo.reconcileInterruptedDownloads(activeTaskIds = setOf("t-active"))
+        assertEquals(1, recovered)
+        assertNull(repo.liveProgress.value["t-orphan"])
+        assertEquals(44f, repo.getTask("t-orphan")?.progress)
+        assertEquals(DownloadStatus.PAUSED, repo.getTask("t-orphan")?.status)
+        assertNotNull(repo.liveProgress.value["t-active"])
+
+        repo.deleteTaskById("t-active")
+        assertNull(repo.liveProgress.value["t-active"])
     }
 }
