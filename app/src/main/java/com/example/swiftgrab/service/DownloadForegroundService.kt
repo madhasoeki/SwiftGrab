@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.example.swiftgrab.R
 import com.example.swiftgrab.SwiftGrabApp
 import com.example.swiftgrab.data.cookies.CookieStorageManager
@@ -21,6 +22,7 @@ import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.data.repository.DownloadRepository
 import com.example.swiftgrab.ui.MainActivity
+import com.example.swiftgrab.ui.NotificationFileActionActivity
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -587,6 +589,7 @@ class DownloadForegroundService : Service() {
 
     private fun showCompletedNotification(taskId: String, title: String, filePath: String, fileSize: Long) {
         val openAppPendingIntent = createOpenAppPendingIntent()
+        val notificationId = taskId.hashCode()
         val sizeFormatted = if (fileSize > 0) " • ${formatBytes(fileSize)}" else ""
         val fallbackName = if (filePath.startsWith("content://")) {
             filePath.substringAfterLast("%2F").substringAfterLast("/")
@@ -594,16 +597,41 @@ class DownloadForegroundService : Service() {
             File(filePath).name
         }
 
-        val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
+        val builder = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(getString(R.string.download_completed))
             .setContentText("${title.ifBlank { fallbackName }}$sizeFormatted")
             .setContentIntent(openAppPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
 
-        notificationManager.notify(taskId.hashCode(), notification)
+        if (filePath.isNotBlank()) {
+            val openFilePendingIntent = createFileActionPendingIntent(
+                action = NotificationFileActionActivity.ACTION_OPEN_FILE,
+                taskId = taskId,
+                filePath = filePath,
+                notificationId = notificationId
+            )
+            val shareFilePendingIntent = createFileActionPendingIntent(
+                action = NotificationFileActionActivity.ACTION_SHARE_FILE,
+                taskId = taskId,
+                filePath = filePath,
+                notificationId = notificationId
+            )
+            builder
+                .addAction(
+                    android.R.drawable.ic_media_play,
+                    getString(R.string.action_open),
+                    openFilePendingIntent
+                )
+                .addAction(
+                    android.R.drawable.ic_menu_share,
+                    getString(R.string.action_share),
+                    shareFilePendingIntent
+                )
+        }
+
+        notificationManager.notify(notificationId, builder.build())
     }
 
     private fun showFailedNotification(taskId: String, title: String, errorMessage: String) {
@@ -641,10 +669,33 @@ class DownloadForegroundService : Service() {
     private fun createActionPendingIntent(action: String, taskId: String): PendingIntent {
         val intent = Intent(this, DownloadActionReceiver::class.java).apply {
             this.action = action
+            data = NotificationFileActionActivity.buildActionDataUriString(taskId, action).toUri()
             putExtra(DownloadActionReceiver.EXTRA_TASK_ID, taskId)
         }
-        val requestCode = (taskId.hashCode() * 31) + action.hashCode()
+        val requestCode = buildActionRequestCode(taskId, action)
         return PendingIntent.getBroadcast(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun createFileActionPendingIntent(
+        action: String,
+        taskId: String,
+        filePath: String,
+        notificationId: Int
+    ): PendingIntent {
+        val intent = NotificationFileActionActivity.createIntent(
+            context = this,
+            taskId = taskId,
+            action = action,
+            filePath = filePath,
+            notificationId = notificationId
+        )
+        val requestCode = buildActionRequestCode(taskId, action)
+        return PendingIntent.getActivity(
             this,
             requestCode,
             intent,
@@ -671,6 +722,10 @@ class DownloadForegroundService : Service() {
         const val EXTRA_TASK_ID = "extra_task_id"
         const val EXTRA_AUDIO_ONLY = "extra_audio_only"
         const val EXTRA_PRESET = "extra_preset"
+
+        internal fun buildActionRequestCode(taskId: String, action: String): Int {
+            return (taskId.hashCode() * 31) + action.hashCode()
+        }
 
         fun startDownload(
             context: Context,

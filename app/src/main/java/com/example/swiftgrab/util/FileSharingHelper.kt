@@ -1,6 +1,7 @@
 package com.example.swiftgrab.util
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -17,6 +18,7 @@ object FileSharingHelper {
     private const val SHARED_MEDIA_DIR = "shared_media"
 
     fun openFile(context: Context, filePath: String) {
+        val toastContext = context.applicationContext ?: context
         if (filePath.startsWith("content://")) {
             try {
                 val uri = filePath.toUri()
@@ -28,21 +30,21 @@ object FileSharingHelper {
                 }
                 context.startActivity(intent)
             } catch (_: ActivityNotFoundException) {
-                Toast.makeText(context, "Tidak ada aplikasi untuk memutar berkas ini", Toast.LENGTH_SHORT).show()
+                Toast.makeText(toastContext, "Tidak ada aplikasi untuk memutar berkas ini", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membuka berkas: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(toastContext, "Gagal membuka berkas: ${e.message}", Toast.LENGTH_SHORT).show()
             }
             return
         }
 
         val file = File(filePath)
         if (!file.exists()) {
-            Toast.makeText(context, "Berkas tidak ditemukan di penyimpanan", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Berkas tidak ditemukan di penyimpanan", Toast.LENGTH_SHORT).show()
             return
         }
 
         val uri: Uri = resolveShareableUri(context, file) ?: run {
-            Toast.makeText(context, "Gagal membuka berkas", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Gagal membuka berkas", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -56,11 +58,12 @@ object FileSharingHelper {
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "Tidak ada aplikasi untuk memutar berkas ini", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Tidak ada aplikasi untuk memutar berkas ini", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun shareFile(context: Context, filePath: String) {
+        val toastContext = context.applicationContext ?: context
         if (filePath.startsWith("content://")) {
             try {
                 val uri = filePath.toUri()
@@ -68,6 +71,7 @@ object FileSharingHelper {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                     type = mimeType
                     putExtra(Intent.EXTRA_STREAM, uri)
+                    clipData = ClipData.newRawUri(null, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 val chooser = Intent.createChooser(shareIntent, "Bagikan berkas via").apply {
@@ -75,19 +79,19 @@ object FileSharingHelper {
                 }
                 context.startActivity(chooser)
             } catch (e: Exception) {
-                Toast.makeText(context, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(toastContext, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
             }
             return
         }
 
         val file = File(filePath)
         if (!file.exists()) {
-            Toast.makeText(context, "Berkas tidak ditemukan", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Berkas tidak ditemukan", Toast.LENGTH_SHORT).show()
             return
         }
 
         val uri: Uri = resolveShareableUri(context, file) ?: run {
-            Toast.makeText(context, "Gagal membagikan berkas", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Gagal membagikan berkas", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -95,6 +99,7 @@ object FileSharingHelper {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = mimeType
             putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(null, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
@@ -105,7 +110,7 @@ object FileSharingHelper {
         try {
             context.startActivity(chooser)
         } catch (e: Exception) {
-            Toast.makeText(context, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(toastContext, "Gagal membagikan: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -144,16 +149,22 @@ object FileSharingHelper {
     private fun getMimeType(file: File): String {
         val extension = file.extension.lowercase()
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-        return when {
-            mime != null -> mime
-            extension == "mp4" -> "video/mp4"
-            extension == "mkv" -> "video/x-matroska"
-            extension == "webm" -> "video/webm"
-            extension == "mp3" -> "audio/mpeg"
-            extension == "m4a" -> "audio/mp4"
-            extension == "aac" -> "audio/aac"
-            extension == "opus" -> "audio/opus"
-            extension == "flac" -> "audio/flac"
+        return mime ?: resolveFallbackMimeType(extension)
+    }
+
+    internal fun resolveFallbackMimeType(extension: String): String {
+        return when (extension.lowercase()) {
+            "mp4" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            "mp3" -> "audio/mpeg"
+            "m4a" -> "audio/mp4"
+            "aac" -> "audio/aac"
+            "opus" -> "audio/opus"
+            "ogg" -> "audio/ogg"
+            "wav" -> "audio/wav"
+            "flac" -> "audio/flac"
             else -> "*/*"
         }
     }

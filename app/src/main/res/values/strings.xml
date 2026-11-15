@@ -9,6 +9,8 @@
     <string name="action_pause">Jeda</string>
     <string name="action_resume">Lanjutkan</string>
     <string name="action_cancel">Batal</string>
+    <string name="action_open">Buka</string>
+    <string name="action_share">Bagikan</string>
     <string name="download_preparing">Menyiapkan unduhan…</string>
     <string name="download_paused">Unduhan dijeda</string>
     <string name="download_completed">Unduhan selesai</string>
