@@ -269,8 +269,12 @@ fun MainRoute(
         AddManualUrlDialog(
             defaultPreset = uiState.settings.defaultPreset,
             onDismiss = { isManualDialogOpen = false },
-            onStartDownload = { url, preset ->
-                viewModel.startDownload(url, preset)
+            onStartDownloads = { urls, preset ->
+                if (urls.size == 1) {
+                    viewModel.startDownload(urls.first(), preset)
+                } else {
+                    viewModel.startBatchDownloads(urls, preset)
+                }
                 isManualDialogOpen = false
             }
         )
@@ -616,18 +620,19 @@ private fun EmptyStateView(
 }
 
 /**
- * Dialog untuk memasukkan tautan URL unduhan secara manual beserta pemilihan preset format.
+ * Dialog untuk memasukkan satu atau beberapa tautan URL unduhan secara manual beserta pemilihan preset format.
  */
 @Composable
 private fun AddManualUrlDialog(
     defaultPreset: DownloadPreset,
     onDismiss: () -> Unit,
-    onStartDownload: (String, DownloadPreset) -> Unit,
+    onStartDownloads: (List<String>, DownloadPreset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var urlText by rememberSaveable { mutableStateOf("") }
     var selectedPreset by rememberSaveable { mutableStateOf(defaultPreset) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val detectedUrls = remember(urlText) { UrlValidator.extractUrls(urlText) }
     val context = LocalContext.current
     val resources = LocalResources.current
 
@@ -659,22 +664,46 @@ private fun AddManualUrlDialog(
                     },
                     label = { Text("Tautan URL") },
                     placeholder = { Text(stringResource(R.string.manual_dialog_hint)) },
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 6,
                     isError = errorMessage != null,
                     supportingText = {
-                        if (errorMessage != null) {
-                            Text(
-                                text = errorMessage ?: "",
-                                color = MaterialTheme.colorScheme.error
-                            )
+                        when {
+                            errorMessage != null -> {
+                                Text(
+                                    text = errorMessage ?: "",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            detectedUrls.size > 1 -> {
+                                Text(
+                                    text = stringResource(R.string.manual_dialog_batch_count, detectedUrls.size),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = stringResource(R.string.manual_dialog_batch_helper),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     },
                     trailingIcon = {
                         IconButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val item = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                                val item = clipboard?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
                                 if (!item.isNullOrBlank()) {
-                                    urlText = item.trim()
+                                    val trimmed = item.trim()
+                                    val existingLines = urlText.lineSequence().map { it.trim() }.toSet()
+                                    urlText = when {
+                                        urlText.isBlank() -> trimmed
+                                        existingLines.contains(trimmed) -> urlText
+                                        else -> "${urlText.trimEnd()}\n$trimmed"
+                                    }
+                                    errorMessage = null
                                 }
                             }
                         ) {
@@ -714,11 +743,11 @@ private fun AddManualUrlDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val safeUrl = UrlValidator.extractUrl(urlText)
-                    if (safeUrl == null) {
+                    val safeUrls = UrlValidator.extractUrls(urlText)
+                    if (safeUrls.isEmpty()) {
                         errorMessage = resources.getString(R.string.manual_dialog_error)
                     } else {
-                        onStartDownload(safeUrl, selectedPreset)
+                        onStartDownloads(safeUrls, selectedPreset)
                     }
                 },
                 shape = RoundedCornerShape(10.dp),
@@ -733,7 +762,13 @@ private fun AddManualUrlDialog(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.btn_start_download))
+                Text(
+                    text = if (detectedUrls.size > 1) {
+                        stringResource(R.string.btn_start_batch_download, detectedUrls.size)
+                    } else {
+                        stringResource(R.string.btn_start_download)
+                    }
+                )
             }
         },
         dismissButton = {

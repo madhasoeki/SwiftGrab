@@ -12,7 +12,7 @@ import java.util.regex.Pattern
 object UrlValidator {
 
     private val WEB_URL_PATTERN: Pattern = Pattern.compile(
-        """(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+)""",
+        """(https?://(?:(?!,https?://)[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%])+)""",
         Pattern.CASE_INSENSITIVE
     )
 
@@ -25,6 +25,8 @@ object UrlValidator {
         "ftp://",
         "android.resource://"
     )
+
+    private val MAX_FORBIDDEN_SCHEME_LENGTH = FORBIDDEN_SCHEMES.maxOf { it.length }
 
     /**
      * Extracts the first safe HTTP or HTTPS URL found in [text].
@@ -48,6 +50,41 @@ object UrlValidator {
             return if (isValidWebUrl(cleaned)) cleaned else null
         }
         return null
+    }
+
+    /**
+     * Extracts all safe, unique HTTP or HTTPS URLs found in [text] (e.g., multi-line batch input).
+     * Lines starting with forbidden schemes or URLs containing forbidden schemes are ignored.
+     */
+    fun extractUrls(text: String?): List<String> {
+        if (text.isNullOrBlank()) return emptyList()
+
+        val results = LinkedHashSet<String>()
+        for (line in text.lineSequence()) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+
+            val lower = trimmed.lowercase()
+            if (FORBIDDEN_SCHEMES.any { lower.startsWith(it) }) {
+                continue
+            }
+
+            val matcher = WEB_URL_PATTERN.matcher(trimmed)
+            while (matcher.find()) {
+                val matchStart = matcher.start()
+                val prefixStart = (matchStart - MAX_FORBIDDEN_SCHEME_LENGTH).coerceAtLeast(0)
+                val prefix = trimmed.substring(prefixStart, matchStart)
+                if (FORBIDDEN_SCHEMES.any { prefix.endsWith(it, ignoreCase = true) }) {
+                    continue
+                }
+                val rawUrl = matcher.group(1) ?: continue
+                val cleaned = cleanTrailingPunctuation(rawUrl)
+                if (isValidWebUrl(cleaned)) {
+                    results.add(cleaned)
+                }
+            }
+        }
+        return results.toList()
     }
 
     /**

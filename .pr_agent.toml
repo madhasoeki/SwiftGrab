@@ -1,0 +1,39 @@
+[config]
+model = "ag/gemini-4-argon-high"
+fallback_models = []
+custom_model_max_tokens = 128000
+max_model_tokens = 32000
+response_language = "en-US"
+repo_context_files = ["AGENTS.md", "DESIGN.md"]
+output_run_details = true
+
+[litellm]
+custom_llm_provider = "openai"
+force_streaming_custom_llm_provider = "openai"
+force_streaming_api_base_substrings = ["bfis.bpd.id"]
+
+[pr_reviewer]
+require_tests_review = true
+require_security_review = true
+require_estimate_effort_to_review = true
+inline_key_issues = true
+persistent_comment = true
+num_max_findings = 6
+extra_instructions = """
+Patuhi panduan arsitektur SwiftGrab (AGENTS.md dan DESIGN.md):
+1. Jetpack Compose UI: Komposabel harus stateless (UDF), hindari rekomposisi berulang pada LazyColumn, gunakan key stabil dan deferred lambda untuk progres.
+2. Inisialisasi biner native (youtubedl-android, ffmpeg, aria2c) wajib asinkron di Dispatchers.IO; jangan hapus useLegacyPackaging atau extractNativeLibs="true".
+3. Background Service: Patuhi aturan Android 14/15 foregroundServiceType="dataSync" dan penanganan Service.onTimeout().
+4. Larangan keras: Jangan pernah menyertakan SDK iklan, analitik pihak ketiga, atau pelacakan tersembunyi.
+5. Pause/Resume: Pause menggunakan destroyProcessById(taskId) tanpa menghapus berkas .part/.aria2; resume menggunakan flag --continue.
+6. Keamanan Intent: Validasi URL dari ACTION_SEND/clipboard menggunakan UrlValidator dan tolak skema lokal berbahaya.
+"""
+
+[pr_description]
+enable_pr_description = true
+enable_pr_diagram = true
+add_original_user_description = true
+publish_labels = false
+
+[pr_code_suggestions]
+committable_code_suggestions = true
