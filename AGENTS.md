@@ -67,3 +67,8 @@ Saat menyelesaikan perubahan kode, jalankan perintah berikut untuk memastikan ti
 * `com.example.swiftgrab.service` — `DownloadForegroundService`, `DownloadActionReceiver`, dan `QuickClipboardTileService`.
 * `com.example.swiftgrab.ui` — `MainActivity`, `ShareInterceptActivity`, `DownloadViewModel`, dan komponen UI di subpaket `components` serta `theme`.
 * **Larangan Keras:** Jangan menambahkan SDK periklanan (AdMob, Unity Ads, Meta Audience Network), SDK pelacak analitik pihak ketiga, atau telemetri tersembunyi dalam bentuk apa pun.
+
+## 5. Pemeliharaan `CHANGELOG.md`
+* Setiap perubahan fitur, perbaikan bug, atau perubahan perilaku aplikasi yang disiapkan dalam PR wajib ditambahkan secara ringkas di bawah bagian `## [Unreleased]` pada [`CHANGELOG.md`](CHANGELOG.md) dengan kategori `Ditambahkan`, `Diubah`, `Diperbaiki`, atau `Keamanan`.
+* Pembaruan dependensi rutin atau perapian internal yang tidak berdampak pada pengguna maupun alur pengembangan tidak perlu dicatat.
+* Saat menyiapkan rilis versi baru (`vX.Y.Z`), pindahkan daftar di `## [Unreleased]` ke bagian `## [X.Y.Z] - YYYY-MM-DD` karena `.github/workflows/release-apk.yml` akan mengekstrak bagian tersebut sebagai catatan rilis GitHub Releases dan dialog pembaruan dalam aplikasi (`UpdateAvailableDialog`).
