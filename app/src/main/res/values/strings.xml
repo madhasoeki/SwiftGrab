@@ -4,6 +4,8 @@
     <string name="download_channel_description">Shows active download progress, speed, and status</string>
     <string name="notification_channel_completed_name">Download Completed</string>
     <string name="notification_channel_completed_description">Notifies when downloads finish or fail</string>
+    <string name="notification_channel_updates_name">Pembaruan Aplikasi</string>
+    <string name="notification_channel_updates_description">Menampilkan notifikasi ketika versi baru SwiftGrab tersedia</string>
     <string name="action_pause">Jeda</string>
     <string name="action_resume">Lanjutkan</string>
     <string name="action_cancel">Batal</string>
@@ -48,6 +50,14 @@
     <string name="settings_auto_clipboard">Deteksi Papan Klip Otomatis</string>
     <string name="settings_auto_clipboard_desc">Otomatis mulai unduhan saat membuka aplikasi jika ada tautan baru di papan klip</string>
     <string name="settings_storage_dir">Folder Penyimpanan</string>
+    <string name="settings_storage_dir_hint">Ketuk untuk memilih folder lain</string>
+    <string name="settings_storage_dir_custom">Folder Kustom (Ketuk untuk ubah)</string>
+    <string name="settings_storage_dir_reset">Kembalikan ke folder default</string>
+    <string name="toast_storage_dir_updated">Folder penyimpanan diubah: %s</string>
+    <string name="toast_storage_dir_reset">Folder penyimpanan dikembalikan ke default</string>
+    <string name="toast_storage_dir_reset_error">Gagal mengembalikan folder penyimpanan ke default.</string>
+    <string name="toast_storage_dir_error">Gagal mempertahankan izin akses ke folder yang dipilih.</string>
+    <string name="toast_legacy_storage_denied">Izin penyimpanan ditolak. Pilih folder penyimpanan agar unduhan dapat disimpan.</string>
     <string name="settings_ytdlp_update">Pembaruan Ekstraktor (yt-dlp)</string>
     <string name="settings_ytdlp_version">Versi yt-dlp: %s</string>
     <string name="btn_check_ytdlp_update">Periksa Pembaruan yt-dlp</string>
@@ -84,4 +94,25 @@
     <string name="btn_x_login">Masuk ke Akun X</string>
     <string name="btn_x_logout">Hapus Cookies / Keluar</string>
     <string name="toast_x_logout_success">Cookies akun X telah dihapus</string>
+
+    <!-- In-App Auto-Updater -->
+    <string name="settings_app_update">Pembaruan Aplikasi</string>
+    <string name="settings_app_version">Versi terpasang: v%s</string>
+    <string name="btn_check_app_update">Periksa Update Aplikasi</string>
+    <string name="app_update_checking">Memeriksa rilis terbaru di GitHub…</string>
+    <string name="app_update_up_to_date">SwiftGrab sudah versi terbaru (v%s)</string>
+    <string name="app_update_error">Gagal memeriksa pembaruan: %s</string>
+    <string name="update_dialog_title">Update Tersedia: v%s</string>
+    <string name="update_dialog_changelog_label">Catatan Rilis (Changelog)</string>
+    <string name="update_dialog_later">Nanti</string>
+    <string name="update_dialog_open_github">Buka di GitHub</string>
+    <string name="update_dialog_download_install">Unduh &amp; Install Sekarang</string>
+    <string name="update_dialog_install_now">Install Sekarang</string>
+    <string name="update_dialog_allow_install">Izinkan &amp; Install</string>
+    <string name="update_dialog_retry">Coba Unduh Lagi</string>
+    <string name="update_downloading_desc">Mengunduh berkas APK pembaruan…</string>
+    <string name="update_permission_required_desc">Aktifkan izin \"Install aplikasi tidak dikenal\" untuk SwiftGrab agar dapat memasang pembaruan.</string>
+    <string name="update_ready_to_install_desc">Berkas APK siap dipasang. Ketuk Install Sekarang jika pemasang sistem tidak terbuka otomatis.</string>
+    <string name="update_notification_text">Versi baru SwiftGrab tersedia. Ketuk untuk mengunduh &amp; memasang.</string>
+    <string name="toast_storage_permission_needed">Izin penyimpanan diperlukan untuk menyimpan langsung ke folder Download/SwiftGrab, atau pilih folder lewat Pengaturan.</string>
 </resources>

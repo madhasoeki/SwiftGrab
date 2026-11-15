@@ -97,7 +97,18 @@ class SwiftGrabApp : Application() {
                 setShowBadge(true)
             }
 
-            notificationManager.createNotificationChannels(listOf(progressChannel, completedChannel))
+            val updatesChannel = NotificationChannel(
+                CHANNEL_UPDATES_ID,
+                getString(R.string.notification_channel_updates_name),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = getString(R.string.notification_channel_updates_description)
+                setShowBadge(true)
+            }
+
+            notificationManager.createNotificationChannels(
+                listOf(progressChannel, completedChannel, updatesChannel)
+            )
         }
     }
 
@@ -139,6 +150,7 @@ class SwiftGrabApp : Application() {
         const val TAG = "SwiftGrabApp"
         const val CHANNEL_PROGRESS_ID = "download_progress_channel"
         const val CHANNEL_COMPLETE_ID = "download_complete_channel"
+        const val CHANNEL_UPDATES_ID = "app_updates_channel"
 
         val internalTileToken: String = UUID.randomUUID().toString()
 
