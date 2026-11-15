@@ -12,7 +12,7 @@ import java.util.regex.Pattern
 object UrlValidator {
 
     private val WEB_URL_PATTERN: Pattern = Pattern.compile(
-        """(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+)""",
+        """(https?://(?:(?!,https?://)[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%])+)""",
         Pattern.CASE_INSENSITIVE
     )
 
@@ -25,6 +25,8 @@ object UrlValidator {
         "ftp://",
         "android.resource://"
     )
+
+    private val MAX_FORBIDDEN_SCHEME_LENGTH = FORBIDDEN_SCHEMES.maxOf { it.length }
 
     /**
      * Extracts the first safe HTTP or HTTPS URL found in [text].
@@ -69,8 +71,10 @@ object UrlValidator {
 
             val matcher = WEB_URL_PATTERN.matcher(trimmed)
             while (matcher.find()) {
-                val prefix = trimmed.substring(0, matcher.start()).lowercase()
-                if (FORBIDDEN_SCHEMES.any { prefix.endsWith(it) }) {
+                val matchStart = matcher.start()
+                val prefixStart = (matchStart - MAX_FORBIDDEN_SCHEME_LENGTH).coerceAtLeast(0)
+                val prefix = trimmed.substring(prefixStart, matchStart)
+                if (FORBIDDEN_SCHEMES.any { prefix.endsWith(it, ignoreCase = true) }) {
                     continue
                 }
                 val rawUrl = matcher.group(1) ?: continue

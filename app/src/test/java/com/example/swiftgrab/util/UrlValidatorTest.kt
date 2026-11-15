@@ -72,11 +72,30 @@ class UrlValidatorTest {
     }
 
     @Test
+    fun `extractUrls splits adjacent comma-delimited links without whitespace while preserving commas inside URLs`() {
+        val commaSeparated = "https://youtu.be/dQw4w9WgXcQ,https://vt.tiktok.com/ZS2abc123/"
+        assertEquals(
+            listOf(
+                "https://youtu.be/dQw4w9WgXcQ",
+                "https://vt.tiktok.com/ZS2abc123/"
+            ),
+            UrlValidator.extractUrls(commaSeparated)
+        )
+
+        val urlWithInternalCommas = "https://example.com/watch/a,b?ids=1,2,3"
+        assertEquals(
+            listOf("https://example.com/watch/a,b?ids=1,2,3"),
+            UrlValidator.extractUrls(urlWithInternalCommas)
+        )
+    }
+
+    @Test
     fun `extractUrls skips forbidden schemes while keeping valid URLs`() {
         val mixed = """
             file:///storage/emulated/0/Download/test.mp4
             javascript:https://evil.com/video.mp4
             foo javascript:https://evil.com/other.mp4
+            Some preceding text before JAVASCRIPT:https://evil.com/upper.mp4
             https://example.com/?next=file:///etc/passwd
             https://www.youtube.com/watch?v=valid123
         """.trimIndent()
