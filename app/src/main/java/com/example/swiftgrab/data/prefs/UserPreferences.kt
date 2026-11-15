@@ -18,52 +18,73 @@ data class SwiftGrabSettings(
 )
 
 /**
+ * Abstraksi preferensi aplikasi agar komponen UI/ViewModel mudah diuji tanpa SharedPreferences nyata.
+ */
+interface DownloadPreferences {
+    val settings: StateFlow<SwiftGrabSettings>
+    fun isInstantShareMode(): Boolean
+    fun setInstantShareMode(enabled: Boolean)
+    fun getDefaultPreset(): DownloadPreset
+    fun setDefaultPreset(preset: DownloadPreset)
+    fun isAutoStartClipboard(): Boolean
+    fun setAutoStartClipboard(enabled: Boolean)
+    fun getLastHandledClipboardUrl(): String?
+    fun setLastHandledClipboardUrl(url: String?)
+    fun getCustomDownloadPath(): String?
+    fun getCustomDownloadUri(): String?
+    fun clearCustomDownloadDir(): Boolean
+    fun saveActiveApkDownload(downloadId: Long, releaseTag: String): Boolean
+    fun getActiveApkDownload(): Pair<Long, String>?
+    fun clearActiveApkDownload()
+}
+
+/**
  * SharedPreferences-backed settings store exposing reactive [StateFlow] and synchronous reads.
  */
-class UserPreferences(context: Context) {
+class UserPreferences(context: Context) : DownloadPreferences {
 
     private val appContext: Context = context.applicationContext
     private val prefs: SharedPreferences =
         appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _settings = MutableStateFlow(readSettings())
-    val settings: StateFlow<SwiftGrabSettings> = _settings.asStateFlow()
+    override val settings: StateFlow<SwiftGrabSettings> = _settings.asStateFlow()
 
-    fun isInstantShareMode(): Boolean =
+    override fun isInstantShareMode(): Boolean =
         prefs.getBoolean(KEY_INSTANT_SHARE_MODE, true)
 
-    fun setInstantShareMode(enabled: Boolean) {
+    override fun setInstantShareMode(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_INSTANT_SHARE_MODE, enabled) }
         _settings.update { it.copy(instantShareMode = enabled) }
     }
 
-    fun getDefaultPreset(): DownloadPreset =
+    override fun getDefaultPreset(): DownloadPreset =
         DownloadPreset.fromName(prefs.getString(KEY_DEFAULT_PRESET, DownloadPreset.BEST_VIDEO.name))
 
-    fun setDefaultPreset(preset: DownloadPreset) {
+    override fun setDefaultPreset(preset: DownloadPreset) {
         prefs.edit { putString(KEY_DEFAULT_PRESET, preset.name) }
         _settings.update { it.copy(defaultPreset = preset) }
     }
 
-    fun isAutoStartClipboard(): Boolean =
+    override fun isAutoStartClipboard(): Boolean =
         prefs.getBoolean(KEY_AUTO_START_CLIPBOARD, false)
 
-    fun setAutoStartClipboard(enabled: Boolean) {
+    override fun setAutoStartClipboard(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_AUTO_START_CLIPBOARD, enabled) }
         _settings.update { it.copy(autoStartClipboard = enabled) }
     }
 
-    fun getLastHandledClipboardUrl(): String? =
+    override fun getLastHandledClipboardUrl(): String? =
         prefs.getString(KEY_LAST_CLIPBOARD_URL, null)
 
-    fun setLastHandledClipboardUrl(url: String?) {
+    override fun setLastHandledClipboardUrl(url: String?) {
         prefs.edit {
             if (url.isNullOrBlank()) remove(KEY_LAST_CLIPBOARD_URL)
             else putString(KEY_LAST_CLIPBOARD_URL, url)
         }
     }
 
-    fun getCustomDownloadPath(): String? =
+    override fun getCustomDownloadPath(): String? =
         prefs.getString(KEY_CUSTOM_DOWNLOAD_PATH, null)
 
     fun setCustomDownloadPath(path: String?) {
@@ -74,7 +95,7 @@ class UserPreferences(context: Context) {
         _settings.update { it.copy(customDownloadPath = path?.takeIf { p -> p.isNotBlank() }) }
     }
 
-    fun getCustomDownloadUri(): String? =
+    override fun getCustomDownloadUri(): String? =
         prefs.getString(KEY_CUSTOM_DOWNLOAD_URI, null)
 
     fun setCustomDownloadUri(uri: String?): Boolean {
@@ -119,7 +140,7 @@ class UserPreferences(context: Context) {
         return committed
     }
 
-    fun clearCustomDownloadDir(): Boolean {
+    override fun clearCustomDownloadDir(): Boolean {
         val previousUri = getCustomDownloadUri()
         val editor = prefs.edit()
         editor.remove(KEY_CUSTOM_DOWNLOAD_PATH)
@@ -140,7 +161,7 @@ class UserPreferences(context: Context) {
     }
 
     @android.annotation.SuppressLint("UseKtx")
-    fun saveActiveApkDownload(downloadId: Long, releaseTag: String): Boolean {
+    override fun saveActiveApkDownload(downloadId: Long, releaseTag: String): Boolean {
         if (downloadId <= 0L || releaseTag.isBlank()) return false
         val editor = prefs.edit()
         editor.putLong(KEY_ACTIVE_APK_DOWNLOAD_ID, downloadId)
@@ -148,13 +169,13 @@ class UserPreferences(context: Context) {
         return editor.commit()
     }
 
-    fun getActiveApkDownload(): Pair<Long, String>? {
+    override fun getActiveApkDownload(): Pair<Long, String>? {
         val id = prefs.getLong(KEY_ACTIVE_APK_DOWNLOAD_ID, -1L)
         val tag = prefs.getString(KEY_ACTIVE_APK_RELEASE_TAG, null)
         return if (id > 0L && !tag.isNullOrBlank()) id to tag else null
     }
 
-    fun clearActiveApkDownload() {
+    override fun clearActiveApkDownload() {
         prefs.edit {
             remove(KEY_ACTIVE_APK_DOWNLOAD_ID)
             remove(KEY_ACTIVE_APK_RELEASE_TAG)

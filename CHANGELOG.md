@@ -8,6 +8,9 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Ditambahkan
+- Tombol aksi **Buka** dan **Bagikan** langsung pada notifikasi unduhan selesai (`showCompletedNotification`) melalui `NotificationFileActionActivity` dan `FileSharingHelper`.
+
 ### Diubah
 - Isolasi rekomposisi progres unduhan pada `LazyColumn` dengan memindahkan progres langsung (*progress*, *speed*, *ETA*, *bytes*) ke `StateFlow<Map<String, LiveProgress>>` di memori dan pembacaan *deferred* di `DownloadTaskCard` agar `MainScreen`, `FilterChipRow`, thumbnail, dan tombol aksi tidak ikut direkomposisi setiap 250 ms.
 - Otomatisasi review Pull Request menggunakan PR-Agent (`the-pr-agent/pr-agent`) melalui gateway OpenAI-compatible.

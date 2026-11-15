@@ -1,8 +1,9 @@
 [config]
 model = "ag/gemini-4-argon-high"
 fallback_models = []
-custom_model_max_tokens = 128000
-max_model_tokens = 32000
+custom_model_max_tokens = 1000000
+max_model_tokens = 250000
+ai_timeout = 240
 response_language = "en-US"
 repo_context_files = ["AGENTS.md", "DESIGN.md"]
 output_run_details = true
@@ -19,6 +20,8 @@ require_estimate_effort_to_review = true
 inline_key_issues = true
 persistent_comment = true
 num_max_findings = 6
+enable_large_pr_chunking = true
+max_number_of_calls = 3
 extra_instructions = """
 Patuhi panduan arsitektur SwiftGrab (AGENTS.md dan DESIGN.md):
 1. Jetpack Compose UI: Komposabel harus stateless (UDF), hindari rekomposisi berulang pada LazyColumn, gunakan key stabil dan deferred lambda untuk progres.
