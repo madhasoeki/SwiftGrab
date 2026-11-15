@@ -81,6 +81,7 @@ import com.example.swiftgrab.R
 import com.example.swiftgrab.data.db.DownloadStatus
 import com.example.swiftgrab.data.db.DownloadTaskEntity
 import com.example.swiftgrab.data.prefs.DownloadPreset
+import com.example.swiftgrab.data.repository.LiveProgress
 import com.example.swiftgrab.ui.components.ClipboardSuggestionBanner
 import com.example.swiftgrab.ui.components.DownloadTaskCard
 import com.example.swiftgrab.ui.components.SettingsBottomSheet
@@ -97,6 +98,10 @@ fun MainRoute(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val liveProgressState = viewModel.liveProgress.collectAsStateWithLifecycle()
+    val liveProgressProvider: (String) -> LiveProgress? = remember(liveProgressState) {
+        { taskId -> liveProgressState.value[taskId] }
+    }
     val pendingLegacyDownload by viewModel.pendingLegacyStorageDownload.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -158,6 +163,7 @@ fun MainRoute(
 
     MainScreen(
         uiState = uiState,
+        liveProgressProvider = liveProgressProvider,
         ytDlpVersion = viewModel.getYtDlpVersion(),
         onSetFilter = viewModel::setFilter,
         onDownloadVideoFromBanner = { url -> viewModel.startDownload(url, DownloadPreset.BEST_VIDEO) },
@@ -312,7 +318,8 @@ fun MainScreen(
     onOpenSettings: () -> Unit,
     onOpenManualDialog: () -> Unit,
     onShowErrorTask: (DownloadTaskEntity) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    liveProgressProvider: (String) -> LiveProgress? = { null }
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -437,8 +444,12 @@ fun MainScreen(
                         key = { it.id },
                         contentType = { "download_task_card" }
                     ) { task ->
+                        val taskProgressProvider = remember(task.id, liveProgressProvider) {
+                            { liveProgressProvider(task.id) }
+                        }
                         DownloadTaskCard(
                             task = task,
+                            liveProgressProvider = taskProgressProvider,
                             onPause = onPauseTask,
                             onResume = onResumeTask,
                             onCancel = onCancelTask,
