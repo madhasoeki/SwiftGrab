@@ -155,7 +155,7 @@ jobs:
 
       - name: Publish to GitHub Releases (CHANGELOG)
         if: steps.notes.outputs.found == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: SwiftGrab ${{ steps.vars.outputs.tag }}
@@ -169,7 +169,7 @@ jobs:
 
       - name: Publish to GitHub Releases (Auto Notes)
         if: steps.notes.outputs.found != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: SwiftGrab ${{ steps.vars.outputs.tag }}
