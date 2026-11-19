@@ -8,6 +8,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-19
+
 ### Keamanan
 - Penguatan WebView `XLoginDialog` dengan menonaktifkan akses berkas lokal (`allowFileAccess = false`, `allowContentAccess = false`), pembatasan navigasi hanya untuk skema HTTPS dan domain resmi/otentikasi, serta validasi token sesi (`auth_token`) sebelum menyimpan cookies.
 - Isolasi berkas `x_cookies.txt` hanya untuk domain resmi X/Twitter (`CookieStorageManager.isXDomain`).
@@ -75,7 +77,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ### Diperbaiki
 - Penyesuaian aturan ProGuard/R8 untuk `youtubedl-android` serta penyederhanaan tata letak dan aksesibilitas UI.
 
-[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.1...v0.0.2
