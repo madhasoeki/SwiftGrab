@@ -17,6 +17,9 @@ interface DownloadDao {
     @Query("SELECT * FROM download_tasks WHERE status IN (:statuses) ORDER BY createdAt DESC")
     fun observeTasksByStatuses(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>>
 
+    @Query("SELECT * FROM download_tasks WHERE status IN (:statuses) ORDER BY createdAt ASC")
+    fun observeTasksByStatusesAsc(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>>
+
     @Query("SELECT * FROM download_tasks WHERE id = :id")
     fun observeTaskById(id: String): Flow<DownloadTaskEntity?>
 

@@ -28,7 +28,10 @@ object DownloadProgressParser {
 
     private val PERCENT_PATTERN = Pattern.compile("""\b([0-9]+(?:\.[0-9]+)?)%""")
     private val ETA_PATTERN = Pattern.compile("""ETA\s+([0-9]+:[0-9]+(?::[0-9]+)?)""", Pattern.CASE_INSENSITIVE)
-    private val ARIA2C_ETA_PATTERN = Pattern.compile("""ETA:(\d+m)?(\d+s)?""", Pattern.CASE_INSENSITIVE)
+    private val ARIA2C_ETA_PATTERN = Pattern.compile(
+        """ETA:(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?""",
+        Pattern.CASE_INSENSITIVE
+    )
 
     /**
      * Parses the callback parameters and raw output line into structured progress data.
@@ -133,9 +136,20 @@ object DownloadProgressParser {
 
         val ariaMatcher = ARIA2C_ETA_PATTERN.matcher(line)
         if (ariaMatcher.find()) {
-            val m = ariaMatcher.group(1)?.removeSuffix("m")?.toLongOrNull() ?: 0L
-            val s = ariaMatcher.group(2)?.removeSuffix("s")?.toLongOrNull() ?: 0L
-            return String.format(Locale.US, "%02d:%02d", m, s)
+            val hStr = ariaMatcher.group(1)
+            val mStr = ariaMatcher.group(2)
+            val sStr = ariaMatcher.group(3)
+            if (hStr == null && mStr == null && sStr == null) {
+                return ""
+            }
+            val h = hStr?.toLongOrNull() ?: 0L
+            val m = mStr?.toLongOrNull() ?: 0L
+            val s = sStr?.toLongOrNull() ?: 0L
+            return if (h > 0L) {
+                String.format(Locale.US, "%02d:%02d:%02d", h, m, s)
+            } else {
+                String.format(Locale.US, "%02d:%02d", m, s)
+            }
         }
 
         return ""

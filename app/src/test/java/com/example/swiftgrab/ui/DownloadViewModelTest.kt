@@ -77,6 +77,11 @@ class DownloadViewModelTest {
                 map.values.filter { it.status in statuses }.sortedByDescending { it.createdAt }
             }
 
+        override fun observeTasksByStatusesAsc(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>> =
+            tasks.map { map ->
+                map.values.filter { it.status in statuses }.sortedBy { it.createdAt }
+            }
+
         override fun observeTaskById(id: String): Flow<DownloadTaskEntity?> =
             tasks.map { it[id] }
 
