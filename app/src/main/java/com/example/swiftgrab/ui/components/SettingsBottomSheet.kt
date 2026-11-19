@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -232,7 +235,9 @@ fun SettingsBottomSheet(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup()
             ) {
                 DownloadPreset.entries.forEach { preset ->
                     PresetSelectCard(
@@ -363,7 +368,7 @@ fun SettingsBottomSheet(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
+                                .heightIn(min = 48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.Login,
@@ -390,7 +395,7 @@ fun SettingsBottomSheet(
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp)
+                                    .heightIn(min = 48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Refresh,
@@ -413,7 +418,7 @@ fun SettingsBottomSheet(
                                 ),
                                 modifier = Modifier
                                     .weight(1.3f)
-                                    .height(44.dp)
+                                    .heightIn(min = 48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.Logout,
@@ -843,7 +848,11 @@ private fun PresetSelectCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onSelect)
+            .selectable(
+                selected = isSelected,
+                role = Role.RadioButton,
+                onClick = onSelect
+            )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -869,7 +878,7 @@ private fun PresetSelectCard(
 
             RadioButton(
                 selected = isSelected,
-                onClick = onSelect,
+                onClick = null,
                 colors = RadioButtonDefaults.colors(
                     selectedColor = MaterialTheme.colorScheme.primary,
                     unselectedColor = MaterialTheme.colorScheme.outline

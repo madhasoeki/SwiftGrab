@@ -8,6 +8,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Diubah
+- Optimasi indeks basis data Room pada kolom `status` dan `createdAt` di `DownloadTaskEntity` serta konfigurasi ekspor skema Room via KSP.
+- Peningkatan target sentuh minimal 48dp (`heightIn(min = 48.dp)`) pada tombol interaktif `ClipboardSuggestionBanner` dan `SettingsBottomSheet`.
+- Perbaikan semantik aksesibilitas TalkBack untuk opsi preset (`Modifier.selectableGroup()` dan `Modifier.selectable(role = Role.RadioButton)` dengan `RadioButton(onClick = null)`) di `QuickFormatSheet` dan `SettingsBottomSheet`.
+- Migrasi penggunaan API `TopAppBarDefaults.centerAlignedTopAppBarColors` yang usang ke `topAppBarColors` pada `MainScreen` dan `XLoginDialog`.
+
+### Diperbaiki
+- Penanganan insets keyboard (`imePadding`) pada dialog login X (`XLoginDialog`) agar bidang input tidak tertutup papan ketik virtual.
+
 ## [0.0.4] - 2026-11-15
 
 ### Ditambahkan
