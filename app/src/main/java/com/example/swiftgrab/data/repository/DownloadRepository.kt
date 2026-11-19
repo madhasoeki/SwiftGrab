@@ -40,6 +40,9 @@ class DownloadRepository(
     fun observeTasksByStatuses(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>> =
         downloadDao.observeTasksByStatuses(statuses)
 
+    fun observeTasksByStatusesAsc(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>> =
+        downloadDao.observeTasksByStatusesAsc(statuses)
+
     fun observeTask(id: String): Flow<DownloadTaskEntity?> =
         downloadDao.observeTaskById(id)
 
