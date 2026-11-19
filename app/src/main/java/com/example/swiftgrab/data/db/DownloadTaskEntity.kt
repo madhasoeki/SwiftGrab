@@ -1,6 +1,7 @@
 package com.example.swiftgrab.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -24,7 +25,7 @@ enum class DownloadStatus {
 /**
  * Room entity representing a single media download task.
  */
-@Entity(tableName = "download_tasks")
+@Entity(tableName = "download_tasks", indices = [Index("status"), Index("createdAt")])
 data class DownloadTaskEntity(
     @PrimaryKey
     val id: String,

@@ -3,6 +3,8 @@ package com.example.swiftgrab.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -180,7 +183,9 @@ private fun QuickFormatSheetContent(
         // Presets List
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .selectableGroup()
         ) {
             DownloadPreset.entries.forEach { preset ->
                 PresetOptionCard(
@@ -480,7 +485,11 @@ private fun PresetOptionCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .selectable(
+                selected = isSelected,
+                role = Role.RadioButton,
+                onClick = onClick
+            )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -506,7 +515,7 @@ private fun PresetOptionCard(
 
             RadioButton(
                 selected = isSelected,
-                onClick = onClick,
+                onClick = null,
                 colors = RadioButtonDefaults.colors(
                     selectedColor = MaterialTheme.colorScheme.primary,
                     unselectedColor = MaterialTheme.colorScheme.outline
