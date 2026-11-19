@@ -142,6 +142,13 @@ class UrlValidatorTest {
         assertFalse(UrlValidator.isValidWebUrl("http://[::1]/video.mp4"))
         assertFalse(UrlValidator.isValidWebUrl("http://[::1]:8080/video.mp4"))
         assertFalse(UrlValidator.isValidWebUrl("http://::1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://0.0.0.0/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://0.0.0.1:8080/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://[fe80::1]/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://[fc00::1]/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://[fd00::1]/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://localhost\\example.com/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://evil.com\\.example.com/video.mp4"))
 
         // Public IPs should remain allowed
         assertTrue(UrlValidator.isValidWebUrl("https://8.8.8.8/video.mp4"))

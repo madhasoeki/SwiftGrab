@@ -28,11 +28,14 @@ object CookieStorageManager {
     fun isXDomain(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val trimmed = url.trim()
+        if (trimmed.contains('\\')) return false
 
         val host = try {
             val uri = java.net.URI(trimmed)
+            if (uri.userInfo != null) return false
             val h = uri.host ?: if (uri.scheme == null) {
-                java.net.URI("https://$trimmed").host
+                val parsed = java.net.URI("https://$trimmed")
+                if (parsed.userInfo != null) null else parsed.host
             } else {
                 null
             }
@@ -41,22 +44,24 @@ object CookieStorageManager {
             null
         } ?: extractHostFallback(trimmed) ?: return false
 
+        if (host.contains('\\') || host.contains('@')) return false
+
         return ALLOWED_X_DOMAINS.any { domain ->
             host == domain || host.endsWith(".$domain")
         }
     }
 
     private fun extractHostFallback(url: String): String? {
+        if (url.contains('\\')) return null
         val withoutProtocol = when {
             url.startsWith("https://", ignoreCase = true) -> url.substring(8)
             url.startsWith("http://", ignoreCase = true) -> url.substring(7)
             else -> url
         }
-        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' }
-        if (authority.isBlank()) return null
-        val withoutUser = authority.substringAfterLast('@')
-        val host = withoutUser.takeWhile { it != ':' }
-        return if (host.isNotBlank()) host.lowercase() else null
+        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' && it != '\\' }
+        if (authority.isBlank() || authority.contains('@')) return null
+        val host = authority.takeWhile { it != ':' }
+        return if (host.isNotBlank() && !host.contains('\\')) host.lowercase() else null
     }
 
     /**

@@ -41,6 +41,9 @@ class XLoginDialogTest {
         assertFalse(isAllowedXLoginUrl("https://apple.com/login"))
         assertFalse(isAllowedXLoginUrl("https://cloudflare.com/login"))
         assertFalse(isAllowedXLoginUrl("https://evil.com"))
+        assertFalse(isAllowedXLoginUrl("https://evil.com\\.x.com/login"))
+        assertFalse(isAllowedXLoginUrl("https://x.com:pass@evil.com/login"))
+        assertFalse(isAllowedXLoginUrl("https://x.com:pass@evil.com/a|b"))
         assertFalse(isAllowedXLoginUrl(""))
         assertFalse(isAllowedXLoginUrl(null))
     }

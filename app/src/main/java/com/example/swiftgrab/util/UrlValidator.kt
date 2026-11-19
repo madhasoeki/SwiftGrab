@@ -94,6 +94,7 @@ object UrlValidator {
     fun isValidWebUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val trimmed = url.trim()
+        if (trimmed.contains('\\')) return false
 
         val isHttp = trimmed.startsWith("http://", ignoreCase = true)
         val isHttps = trimmed.startsWith("https://", ignoreCase = true)
@@ -108,11 +109,11 @@ object UrlValidator {
         }
 
         val withoutProtocol = if (isHttps) trimmed.substring(8) else trimmed.substring(7)
-        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' }
+        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' && it != '\\' }
         if (authority.isBlank()) return false
 
         // Reject userinfo (e.g., https://user:pass@host/ or https://user@host/)
-        if (authority.contains('@')) return false
+        if (authority.contains('@') || authority.contains('\\')) return false
 
         val host = if (authority.startsWith('[')) {
             val closeBracket = authority.indexOf(']')
@@ -122,7 +123,7 @@ object UrlValidator {
             authority.takeWhile { it != ':' }
         }
 
-        if (host.isBlank()) return false
+        if (host.isBlank() || host.contains('\\')) return false
 
         // Reject local/private/loopback IPs and localhost
         if (isLocalOrPrivateHost(host)) return false
@@ -134,6 +135,7 @@ object UrlValidator {
     }
 
     internal fun isLocalOrPrivateHost(host: String): Boolean {
+        if (host.contains('\\') || host.contains('@')) return true
         val lower = host.lowercase().removePrefix("[").removeSuffix("]")
         if (lower == "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local") || lower.endsWith(".localdomain")) {
             return true
@@ -141,6 +143,9 @@ object UrlValidator {
         if (lower == "::1" || lower == "0:0:0:0:0:0:0:1" || lower == "::" || lower == "0:0:0:0:0:0:0:0") {
             return true
         }
+        // IPv4 0.0.0.0/8 (routes to loopback on Android/Linux)
+        if (lower == "0.0.0.0" || lower.startsWith("0.")) return true
+        // IPv4 Loopback and RFC 1918 Private ranges
         if (lower.startsWith("127.")) return true
         if (lower.startsWith("10.")) return true
         if (lower.startsWith("192.168.")) return true
@@ -154,9 +159,18 @@ object UrlValidator {
                 }
             }
         }
+        // IPv6 Link-Local (fe80::/10: fe8*, fe9*, fea*, feb*)
+        if (lower.startsWith("fe80:") || lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
+            return true
+        }
+        // IPv6 Unique Local Address (fc00::/7: fc*, fd*)
+        if (lower.startsWith("fc") || lower.startsWith("fd")) {
+            return true
+        }
+        // IPv4-mapped IPv6 (::ffff:0:0/96)
         if (lower.startsWith("::ffff:")) {
             val v4 = lower.removePrefix("::ffff:")
-            if (v4.startsWith("127.") || v4.startsWith("10.") || v4.startsWith("192.168.") || v4.startsWith("169.254.")) {
+            if (v4 == "0.0.0.0" || v4.startsWith("0.") || v4.startsWith("127.") || v4.startsWith("10.") || v4.startsWith("192.168.") || v4.startsWith("169.254.")) {
                 return true
             }
             if (v4.startsWith("172.")) {

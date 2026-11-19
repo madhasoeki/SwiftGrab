@@ -325,6 +325,7 @@ private val ALLOWED_AUTH_DOMAINS = listOf(
 internal fun isAllowedXLoginHost(host: String?): Boolean {
     if (host.isNullOrBlank()) return false
     val lower = host.lowercase()
+    if (lower.contains('\\') || lower.contains('@')) return false
     return ALLOWED_AUTH_DOMAINS.any { domain ->
         lower == domain || lower.endsWith(".$domain")
     }
@@ -332,15 +333,20 @@ internal fun isAllowedXLoginHost(host: String?): Boolean {
 
 internal fun isAllowedXLoginUri(uri: Uri?): Boolean {
     if (uri == null) return false
+    val uriString = uri.toString()
+    if (uriString.contains('\\')) return false
     if (!"https".equals(uri.scheme, ignoreCase = true)) return false
+    if (uri.userInfo != null) return false
     return isAllowedXLoginHost(uri.host)
 }
 
 internal fun isAllowedXLoginUrl(url: String?): Boolean {
     if (url.isNullOrBlank()) return false
     val trimmed = url.trim()
+    if (trimmed.contains('\\')) return false
     val (scheme, host) = try {
         val uri = java.net.URI(trimmed)
+        if (uri.userInfo != null) return false
         Pair(uri.scheme, uri.host)
     } catch (_: Exception) {
         val s = when {
@@ -349,9 +355,14 @@ internal fun isAllowedXLoginUrl(url: String?): Boolean {
             else -> null
         }
         val after = if (s != null) trimmed.substring(s.length + 3) else trimmed
-        val h = after.takeWhile { it != '/' && it != '?' && it != '#' && it != ':' }
+        val authority = after.takeWhile { it != '/' && it != '?' && it != '#' && it != '\\' }
+        if (authority.contains('@') || authority.contains('\\')) {
+            return false
+        }
+        val h = authority.takeWhile { it != ':' }
         Pair(s, h)
     }
     if (!"https".equals(scheme, ignoreCase = true)) return false
+    if (host.isNullOrBlank() || host.contains('@') || host.contains('\\')) return false
     return isAllowedXLoginHost(host)
 }

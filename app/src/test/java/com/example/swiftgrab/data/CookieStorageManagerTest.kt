@@ -51,6 +51,8 @@ class CookieStorageManagerTest {
         assertFalse(CookieStorageManager.isXDomain("https://youtube.com/watch?v=123"))
         assertFalse(CookieStorageManager.isXDomain("https://instagram.com/reel/123"))
         assertFalse(CookieStorageManager.isXDomain("https://x.com@evil.com/status/123"))
+        assertFalse(CookieStorageManager.isXDomain("https://x.com:pass@evil.com/status/123"))
+        assertFalse(CookieStorageManager.isXDomain("https://evil.com\\.x.com/status/123"))
         assertFalse(CookieStorageManager.isXDomain(""))
         assertFalse(CookieStorageManager.isXDomain("   "))
         assertFalse(CookieStorageManager.isXDomain(null))
