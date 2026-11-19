@@ -31,6 +31,11 @@ class DownloadRepositoryTest {
                 map.values.filter { it.status in statuses }.sortedByDescending { it.createdAt }
             }
 
+        override fun observeTasksByStatusesAsc(statuses: List<DownloadStatus>): Flow<List<DownloadTaskEntity>> =
+            tasks.map { map ->
+                map.values.filter { it.status in statuses }.sortedBy { it.createdAt }
+            }
+
         override fun observeTaskById(id: String): Flow<DownloadTaskEntity?> =
             tasks.map { it[id] }
 
@@ -186,6 +191,25 @@ class DownloadRepositoryTest {
         override suspend fun deleteCompletedTasks(completedStatus: DownloadStatus) {
             tasks.value = tasks.value.filterValues { it.status != completedStatus }
         }
+    }
+
+    @Test
+    fun `observeTasksByStatusesAsc returns tasks sorted by createdAt ascending`() = runTest {
+        val repo = DownloadRepository(FakeDownloadDao())
+
+        val task1 = DownloadTaskEntity(id = "task-1", url = "https://example.com/1", title = "First", createdAt = 1000L, status = DownloadStatus.QUEUED)
+        val task2 = DownloadTaskEntity(id = "task-2", url = "https://example.com/2", title = "Second", createdAt = 2000L, status = DownloadStatus.QUEUED)
+        repo.upsertTask(task1)
+        repo.upsertTask(task2)
+
+        val queuedAsc = repo.observeTasksByStatusesAsc(listOf(DownloadStatus.QUEUED)).first()
+        assertEquals(2, queuedAsc.size)
+        assertEquals("task-1", queuedAsc[0].id)
+        assertEquals("task-2", queuedAsc[1].id)
+
+        val queuedDesc = repo.observeTasksByStatuses(listOf(DownloadStatus.QUEUED)).first()
+        assertEquals("task-2", queuedDesc[0].id)
+        assertEquals("task-1", queuedDesc[1].id)
     }
 
     @Test

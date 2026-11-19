@@ -9,12 +9,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ## [Unreleased]
 
 ### Diubah
-- Optimasi indeks basis data Room pada kolom `status` dan `createdAt` di `DownloadTaskEntity` serta konfigurasi ekspor skema Room via KSP.
+- Optimasi indeks basis data Room pada kolom `status` dan `createdAt` di `DownloadTaskEntity` (migrasi versi 3) serta konfigurasi ekspor skema Room via KSP.
 - Peningkatan target sentuh minimal 48dp (`heightIn(min = 48.dp)`) pada tombol interaktif `ClipboardSuggestionBanner` dan `SettingsBottomSheet`.
 - Perbaikan semantik aksesibilitas TalkBack untuk opsi preset (`Modifier.selectableGroup()` dan `Modifier.selectable(role = Role.RadioButton)` dengan `RadioButton(onClick = null)`) di `QuickFormatSheet` dan `SettingsBottomSheet`.
 - Migrasi penggunaan API `TopAppBarDefaults.centerAlignedTopAppBarColors` yang usang ke `topAppBarColors` pada `MainScreen` dan `XLoginDialog`.
 
 ### Diperbaiki
+- Pemisahan ID notifikasi tugas aktif (`NOTIFICATION_FOREGROUND_ID = 1001`) dan tugas terjeda (`pausedNotificationId`) agar notifikasi terjeda beserta tombol Lanjutkan tetap bertahan di status bar saat unduhan aktif selesai.
+- Penanganan Partial WakeLock (`PARTIAL_WAKE_LOCK`, tag `SwiftGrab::DownloadWakeLock`) dengan batas waktu aman 60 menit saat unduhan berjalan, serta pelepasan otomatis saat antrean kosong, timeout FGS Android 15, maupun saat service dihancurkan.
+- Propagasi `CancellationException` pada pembersihan coroutine (`NonCancellable`) di foreground service untuk mematuhi prinsip structured concurrency.
+- Perbaikan regex parser ETA `aria2c` untuk mendukung durasi jam (`ETA:1h5m20s`) dan format `>= 1 jam` (`01:05:20`).
+- Penambahan query antrean FIFO (`observeTasksByStatusesAsc`) pada `DownloadDao` agar tugas diantrekan secara urut berdasarkan waktu pembuatan (`createdAt ASC`).
 - Penanganan insets keyboard (`imePadding`) pada dialog login X (`XLoginDialog`) agar bidang input tidak tertutup papan ketik virtual.
 
 ## [0.0.4] - 2026-11-15

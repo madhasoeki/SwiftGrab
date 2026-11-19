@@ -62,6 +62,30 @@ class DownloadProgressParserTest {
     }
 
     @Test
+    fun `formats aria2c eta with hours minutes and seconds correctly`() {
+        val eta = DownloadProgressParser.formatEta(-1L, "[#1a2b3c 54MiB/120MiB(45%) CN:8 DL:8.4MiB ETA:1h5m20s]")
+        assertEquals("01:05:20", eta)
+    }
+
+    @Test
+    fun `formats aria2c eta with hours and minutes correctly`() {
+        val eta = DownloadProgressParser.formatEta(-1L, "ETA:2h10m")
+        assertEquals("02:10:00", eta)
+    }
+
+    @Test
+    fun `formats aria2c eta with seconds only correctly`() {
+        val eta = DownloadProgressParser.formatEta(-1L, "ETA:45s")
+        assertEquals("00:45", eta)
+    }
+
+    @Test
+    fun `returns empty string for empty aria2c eta`() {
+        val eta = DownloadProgressParser.formatEta(-1L, "ETA:")
+        assertEquals("", eta)
+    }
+
+    @Test
     fun `throttler limits updates to minimum 250ms interval`() {
         var fakeTime = 1000L
         val throttler = UpdateThrottler(minIntervalMs = 250L) { fakeTime }
