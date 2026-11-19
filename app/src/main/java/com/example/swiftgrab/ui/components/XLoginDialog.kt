@@ -2,9 +2,11 @@ package com.example.swiftgrab.ui.components
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -126,7 +128,7 @@ fun XLoginDialog(
                                     else -> twitterCookies
                                 }
 
-                                if (merged.isNotBlank()) {
+                                if (CookieStorageManager.containsAuthTokens(merged)) {
                                     CookieStorageManager.saveXCookies(context, merged)
                                     Toast.makeText(
                                         context,
@@ -137,7 +139,7 @@ fun XLoginDialog(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        "Belum ada cookies yang terdeteksi di browser",
+                                        "Belum ada sesi login (auth_token) yang terdeteksi. Silakan login terlebih dahulu.",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -236,6 +238,8 @@ fun XLoginDialog(
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
+                                    allowFileAccess = false
+                                    allowContentAccess = false
                                     setSupportZoom(true)
                                     builtInZoomControls = true
                                     displayZoomControls = false
@@ -258,6 +262,22 @@ fun XLoginDialog(
                                 }
 
                                 webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?
+                                    ): Boolean {
+                                        val uri = request?.url ?: return true
+                                        return !isAllowedXLoginUri(uri)
+                                    }
+
+                                    @Deprecated("Deprecated in Java")
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        url: String?
+                                    ): Boolean {
+                                        return !isAllowedXLoginUrl(url)
+                                    }
+
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                         checkCookiesForAuth(url)
                                     }
@@ -292,4 +312,57 @@ fun XLoginDialog(
             }
         }
     }
+}
+
+private val ALLOWED_AUTH_DOMAINS = listOf(
+    "x.com",
+    "twitter.com",
+    "accounts.google.com",
+    "appleid.apple.com",
+    "challenges.cloudflare.com"
+)
+
+internal fun isAllowedXLoginHost(host: String?): Boolean {
+    if (host.isNullOrBlank()) return false
+    val lower = host.lowercase()
+    if (lower.contains('\\') || lower.contains('@')) return false
+    return ALLOWED_AUTH_DOMAINS.any { domain ->
+        lower == domain || lower.endsWith(".$domain")
+    }
+}
+
+internal fun isAllowedXLoginUri(uri: Uri?): Boolean {
+    if (uri == null) return false
+    val uriString = uri.toString()
+    if (uriString.contains('\\')) return false
+    if (!"https".equals(uri.scheme, ignoreCase = true)) return false
+    if (uri.userInfo != null) return false
+    return isAllowedXLoginHost(uri.host)
+}
+
+internal fun isAllowedXLoginUrl(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val trimmed = url.trim()
+    if (trimmed.contains('\\')) return false
+    val (scheme, host) = try {
+        val uri = java.net.URI(trimmed)
+        if (uri.userInfo != null) return false
+        Pair(uri.scheme, uri.host)
+    } catch (_: Exception) {
+        val s = when {
+            trimmed.startsWith("https://", ignoreCase = true) -> "https"
+            trimmed.startsWith("http://", ignoreCase = true) -> "http"
+            else -> null
+        }
+        val after = if (s != null) trimmed.substring(s.length + 3) else trimmed
+        val authority = after.takeWhile { it != '/' && it != '?' && it != '#' && it != '\\' }
+        if (authority.contains('@') || authority.contains('\\')) {
+            return false
+        }
+        val h = authority.takeWhile { it != ':' }
+        Pair(s, h)
+    }
+    if (!"https".equals(scheme, ignoreCase = true)) return false
+    if (host.isNullOrBlank() || host.contains('@') || host.contains('\\')) return false
+    return isAllowedXLoginHost(host)
 }

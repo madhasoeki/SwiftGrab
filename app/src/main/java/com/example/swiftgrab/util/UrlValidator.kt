@@ -88,11 +88,13 @@ object UrlValidator {
     }
 
     /**
-     * Verifies that the given [url] is a valid HTTP or HTTPS URL and does not contain forbidden schemes.
+     * Verifies that the given [url] is a valid HTTP or HTTPS URL, does not contain forbidden schemes,
+     * does not contain userinfo, and does not target local/private/loopback IPs or localhost.
      */
     fun isValidWebUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val trimmed = url.trim()
+        if (trimmed.contains('\\')) return false
 
         val isHttp = trimmed.startsWith("http://", ignoreCase = true)
         val isHttps = trimmed.startsWith("https://", ignoreCase = true)
@@ -106,12 +108,86 @@ object UrlValidator {
             }
         }
 
-        // Host must exist after protocol
         val withoutProtocol = if (isHttps) trimmed.substring(8) else trimmed.substring(7)
-        val host = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' && it != ':' }
-        if (host.isBlank() || !host.contains('.')) return false
+        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' && it != '\\' }
+        if (authority.isBlank()) return false
+
+        // Reject userinfo (e.g., https://user:pass@host/ or https://user@host/)
+        if (authority.contains('@') || authority.contains('\\')) return false
+
+        val host = if (authority.startsWith('[')) {
+            val closeBracket = authority.indexOf(']')
+            if (closeBracket == -1) return false
+            authority.substring(0, closeBracket + 1)
+        } else {
+            authority.takeWhile { it != ':' }
+        }
+
+        if (host.isBlank() || host.contains('\\')) return false
+
+        // Reject local/private/loopback IPs and localhost
+        if (isLocalOrPrivateHost(host)) return false
+
+        val cleanHost = host.removePrefix("[").removeSuffix("]")
+        if (!cleanHost.contains('.') && !cleanHost.contains(':')) return false
 
         return true
+    }
+
+    internal fun isLocalOrPrivateHost(host: String): Boolean {
+        if (host.contains('\\') || host.contains('@')) return true
+        val lower = host.lowercase().removePrefix("[").removeSuffix("]")
+        if (lower == "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local") || lower.endsWith(".localdomain")) {
+            return true
+        }
+
+        // IPv6 addresses (must contain ':')
+        if (lower.contains(':')) {
+            if (lower == "::1" || lower == "0:0:0:0:0:0:0:1" || lower == "::" || lower == "0:0:0:0:0:0:0:0") {
+                return true
+            }
+            // IPv4-mapped IPv6 (::ffff:0:0/96)
+            if (lower.startsWith("::ffff:")) {
+                val v4 = lower.removePrefix("::ffff:")
+                return isLocalOrPrivateIpv4(v4)
+            }
+            // IPv6 Link-Local (fe80::/10: fe8*, fe9*, fea*, feb*)
+            if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
+                return true
+            }
+            // IPv6 Unique Local Address (fc00::/7: fc*, fd*)
+            if (lower.startsWith("fc") || lower.startsWith("fd")) {
+                return true
+            }
+            return false
+        }
+
+        // IPv4 addresses
+        return isLocalOrPrivateIpv4(lower)
+    }
+
+    private fun isLocalOrPrivateIpv4(host: String): Boolean {
+        val parts = host.split(".")
+        if (parts.size != 4) return false
+        val octets = parts.map { it.toIntOrNull() ?: return false }
+        if (octets.any { it !in 0..255 }) return false
+
+        val (o1, o2) = Pair(octets[0], octets[1])
+        return when {
+            // 0.0.0.0/8 (routes to loopback on Android/Linux)
+            o1 == 0 -> true
+            // 127.0.0.0/8 (loopback)
+            o1 == 127 -> true
+            // 10.0.0.0/8 (private)
+            o1 == 10 -> true
+            // 169.254.0.0/16 (link-local)
+            o1 == 169 && o2 == 254 -> true
+            // 172.16.0.0/12 (private: 172.16.0.0 - 172.31.255.255)
+            o1 == 172 && o2 in 16..31 -> true
+            // 192.168.0.0/16 (private)
+            o1 == 192 && o2 == 168 -> true
+            else -> false
+        }
     }
 
     /**
@@ -124,9 +200,15 @@ object UrlValidator {
             trimmed.startsWith("http://", ignoreCase = true) -> trimmed.substring(7)
             else -> return trimmed
         }
-        return afterProtocol
-            .takeWhile { it != '/' && it != '?' && it != '#' && it != ':' }
-            .removePrefix("www.")
+        val authority = afterProtocol.takeWhile { it != '/' && it != '?' && it != '#' }
+        val withoutUser = authority.substringAfterLast('@')
+        val host = if (withoutUser.startsWith('[')) {
+            val close = withoutUser.indexOf(']')
+            if (close != -1) withoutUser.substring(0, close + 1) else withoutUser.takeWhile { it != ':' }
+        } else {
+            withoutUser.takeWhile { it != ':' }
+        }
+        return host.removePrefix("www.")
     }
 
     /**
