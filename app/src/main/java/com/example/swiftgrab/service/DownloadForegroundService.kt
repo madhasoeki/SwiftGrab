@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -56,6 +57,9 @@ class DownloadForegroundService : Service() {
     private lateinit var repository: DownloadRepository
     private lateinit var notificationManager: NotificationManager
 
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val wakeLockLock = Any()
+
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val activeMetadataJobs = ConcurrentHashMap<String, Job>()
     private val pausedTaskIds = ConcurrentHashMap.newKeySet<String>()
@@ -73,6 +77,14 @@ class DownloadForegroundService : Service() {
         repository = (application as SwiftGrabApp).repository
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        wakeLock = powerManager?.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            WAKELOCK_TAG
+        )?.apply {
+            setReferenceCounted(false)
+        }
+
         serviceScope.launch {
             try {
                 (application as? SwiftGrabApp)?.awaitStartupReconciliation()
@@ -88,6 +100,45 @@ class DownloadForegroundService : Service() {
                 serviceReadyDeferred.complete(Unit)
             }
             startQueueObserver()
+        }
+    }
+
+    private fun acquireWakeLock() {
+        synchronized(wakeLockLock) {
+            try {
+                if (wakeLock == null) {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    wakeLock = powerManager?.newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK,
+                        WAKELOCK_TAG
+                    )?.apply {
+                        setReferenceCounted(false)
+                    }
+                }
+                wakeLock?.let { lock ->
+                    if (!lock.isHeld) {
+                        lock.acquire(WAKELOCK_TIMEOUT_MS)
+                        Log.d(TAG, "Acquired partial WakeLock with ${WAKELOCK_TIMEOUT_MS}ms timeout")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error acquiring WakeLock", e)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        synchronized(wakeLockLock) {
+            try {
+                wakeLock?.let { lock ->
+                    if (lock.isHeld) {
+                        lock.release()
+                        Log.d(TAG, "Released partial WakeLock")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing WakeLock", e)
+            }
         }
     }
 
@@ -117,6 +168,7 @@ class DownloadForegroundService : Service() {
                     try {
                         serviceReadyDeferred.await()
                         if (taskId != null) {
+                            notificationManager.cancel(pausedNotificationId(taskId))
                             val existing = repository.getTask(taskId)
                             if (existing != null) {
                                 if (preFetchedTitle != null || preFetchedThumb != null || preFetchedDuration > 0L) {
@@ -173,17 +225,23 @@ class DownloadForegroundService : Service() {
     private fun startQueueObserver() {
         queueCollectorJob?.cancel()
         queueCollectorJob = serviceScope.launch {
-            repository.observeTasksByStatuses(listOf(DownloadStatus.QUEUED))
-                .collectLatest { queuedTasks ->
-                    for (task in queuedTasks) {
-                        if (activeJobs.size >= MAX_CONCURRENT_DOWNLOADS) {
-                            break
-                        }
-                        if (!activeJobs.containsKey(task.id)) {
-                            startDownloadJob(task)
+            try {
+                repository.observeTasksByStatusesAsc(listOf(DownloadStatus.QUEUED))
+                    .collectLatest { queuedTasks ->
+                        for (task in queuedTasks) {
+                            if (activeJobs.size >= MAX_CONCURRENT_DOWNLOADS) {
+                                break
+                            }
+                            if (!activeJobs.containsKey(task.id)) {
+                                startDownloadJob(task)
+                            }
                         }
                     }
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error in queue observer", t)
+            }
         }
     }
 
@@ -193,6 +251,8 @@ class DownloadForegroundService : Service() {
             pausedTaskIds.remove(task.id)
             canceledTaskIds.remove(task.id)
             DownloadFileManager.clearTaskCanceled(task.id)
+
+            acquireWakeLock()
 
             val job = serviceScope.launch(start = CoroutineStart.LAZY) {
                 executeDownload(task)
@@ -451,6 +511,7 @@ class DownloadForegroundService : Service() {
                 DownloadFileManager.scanMediaPath(this, finalPath)
             }
 
+            notificationManager.cancel(pausedNotificationId(taskId))
             showCompletedNotification(taskId, execState.title, finalPath, finalSize)
             Log.i(TAG, "Download completed for task: $taskId -> $finalPath")
         } catch (t: Throwable) {
@@ -459,6 +520,9 @@ class DownloadForegroundService : Service() {
             activeMetadataJobs.remove(taskId)?.cancel()
             activeJobs.remove(taskId)
             throttlers.remove(taskId)
+            if (activeJobs.isEmpty()) {
+                releaseWakeLock()
+            }
             checkAndStopIfIdle()
         }
     }
@@ -489,7 +553,10 @@ class DownloadForegroundService : Service() {
                     Log.d(TAG, "Task $taskId was canceled by user")
                     DownloadFileManager.cleanupTemporaryFiles(this@DownloadForegroundService, taskId)
                     repository.updateStatus(taskId, DownloadStatus.CANCELED)
-                    notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
+                    notificationManager.cancel(pausedNotificationId(taskId))
+                    if (activeJobs.isEmpty()) {
+                        notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
+                    }
                 }
                 t is CancellationException -> {
                     Log.d(TAG, "Task $taskId coroutine was canceled")
@@ -502,9 +569,13 @@ class DownloadForegroundService : Service() {
                     Log.e(TAG, "Task $taskId failed with exception: ${t.message}", t)
                     val errorMessage = t.message ?: "Download failed"
                     repository.updateStatus(taskId, DownloadStatus.FAILED, errorMessage = errorMessage)
+                    notificationManager.cancel(pausedNotificationId(taskId))
                     showFailedNotification(taskId, latestTitle, errorMessage)
                 }
             }
+        }
+        if (t is CancellationException) {
+            throw t
         }
     }
 
@@ -530,6 +601,9 @@ class DownloadForegroundService : Service() {
             if (task != null) {
                 updatePausedNotification(taskId, task.title, task.progress)
             }
+            if (activeJobs.isEmpty()) {
+                releaseWakeLock()
+            }
             checkAndStopIfIdle()
         }
     }
@@ -538,13 +612,16 @@ class DownloadForegroundService : Service() {
         pausedTaskIds.remove(taskId)
         canceledTaskIds.remove(taskId)
         DownloadFileManager.clearTaskCanceled(taskId)
+        notificationManager.cancel(pausedNotificationId(taskId))
 
         serviceScope.launch {
-            serviceReadyDeferred.await()
-            repository.updateStatus(taskId, DownloadStatus.QUEUED)
-            val task = repository.getTask(taskId)
-            if (task != null) {
-                startDownloadJob(task)
+            try {
+                serviceReadyDeferred.await()
+                repository.updateStatus(taskId, DownloadStatus.QUEUED)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resuming task $taskId", e)
             }
         }
     }
@@ -572,13 +649,18 @@ class DownloadForegroundService : Service() {
             DownloadFileManager.cleanupTemporaryFiles(this@DownloadForegroundService, taskId)
             repository.updateStatus(taskId, DownloadStatus.CANCELED)
 
-            notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
+            notificationManager.cancel(pausedNotificationId(taskId))
+            if (activeJobs.isEmpty()) {
+                notificationManager.cancel(NOTIFICATION_FOREGROUND_ID)
+                releaseWakeLock()
+            }
             checkAndStopIfIdle()
         }
     }
 
     private fun checkAndStopIfIdle() {
         if (activeJobs.isEmpty()) {
+            releaseWakeLock()
             serviceScope.launch {
                 serviceReadyDeferred.await()
                 if (activeJobs.isNotEmpty()) return@launch
@@ -605,12 +687,17 @@ class DownloadForegroundService : Service() {
                     YoutubeDL.getInstance().destroyProcessById(taskId)
                     job.cancel()
                     repository.updateStatus(taskId, DownloadStatus.PAUSED)
+                    val task = repository.getTask(taskId)
+                    if (task != null) {
+                        updatePausedNotification(taskId, task.title, task.progress)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error pausing task $taskId during onTimeout", e)
                 }
             }
             activeMetadataJobs.clear()
             activeJobs.clear()
+            releaseWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -618,6 +705,7 @@ class DownloadForegroundService : Service() {
 
     override fun onDestroy() {
         isDestroying = true
+        releaseWakeLock()
         val orphanedIds = activeJobs.keys.filterNot { canceledTaskIds.contains(it) }
         val metadataIds = activeMetadataJobs.keys.toList()
         queueCollectorJob?.cancel()
@@ -727,7 +815,7 @@ class DownloadForegroundService : Service() {
             )
             .build()
 
-        notificationManager.notify(NOTIFICATION_FOREGROUND_ID, notification)
+        notificationManager.notify(pausedNotificationId(taskId), notification)
     }
 
     private fun showCompletedNotification(taskId: String, title: String, filePath: String, fileSize: Long) {
@@ -872,8 +960,12 @@ class DownloadForegroundService : Service() {
         private const val TAG = "DownloadForegroundSvc"
         const val NOTIFICATION_FOREGROUND_ID = 1001
         const val MAX_CONCURRENT_DOWNLOADS = 2
+        private const val WAKELOCK_TAG = "SwiftGrab::DownloadWakeLock"
+        private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L
         private const val METADATA_FETCH_TIMEOUT_MS = 20_000L
         private const val METADATA_FINALIZE_GRACE_MS = 2_500L
+
+        fun pausedNotificationId(taskId: String): Int = 200_000 + (taskId.hashCode() and 0x0FFF_FFFF)
 
         const val ACTION_START_DOWNLOAD = "com.example.swiftgrab.action.START_DOWNLOAD"
         const val EXTRA_URL = "extra_url"
