@@ -253,7 +253,11 @@ class ShareInterceptActivity : ComponentActivity() {
 
         metadataJob = lifecycleScope.launch {
             val app = application as SwiftGrabApp
-            val cookiesFile = CookieStorageManager.getXCookiesFile(this@ShareInterceptActivity)
+            val cookiesFile = if (CookieStorageManager.isXDomain(url)) {
+                CookieStorageManager.getXCookiesFile(this@ShareInterceptActivity)
+            } else {
+                null
+            }
             val result = withTimeoutOrNull(PREVIEW_METADATA_TIMEOUT_MS) {
                 MediaMetadataExtractor.fetch(
                     app = app,

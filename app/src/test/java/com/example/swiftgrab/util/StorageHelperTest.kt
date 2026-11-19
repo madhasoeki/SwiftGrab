@@ -75,6 +75,19 @@ class StorageHelperTest {
     }
 
     @Test
+    fun `resolvePathFromDocumentId normalizes backslash separators in external storage dirs`() {
+        val primaryRoot = tempFolder.newFolder("primary_root_bs")
+        // Create simulated windows path with backslashes
+        val mockSdDir = File("C:\\storage_1234-5678\\Android\\data\\com.example.swiftgrab\\files")
+        val resolved = StorageHelper.resolvePathFromDocumentId(
+            docId = "1234-5678:Downloads/Clip",
+            primaryStorageRoot = primaryRoot,
+            externalStorageDirs = listOf(mockSdDir)
+        )
+        assertEquals(File("C:/storage_1234-5678", "Downloads/Clip").absolutePath, resolved)
+    }
+
+    @Test
     fun `resolvePathFromDocumentId returns null for invalid non-matching document IDs`() {
         val primaryRoot = tempFolder.newFolder("dummy_root")
 
