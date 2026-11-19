@@ -231,7 +231,7 @@ object StorageHelper {
 
             // Cek externalFilesDirs untuk menemukan volume ID root
             for (dir in externalStorageDirs) {
-                val abs = dir.absolutePath
+                val abs = dir.absolutePath.replace('\\', '/')
                 if (abs.contains(volumeId)) {
                     val rootPath = abs.substringBefore("/Android")
                     val target = if (relative.isNotEmpty()) File(rootPath, relative) else File(rootPath)
