@@ -153,6 +153,14 @@ class UrlValidatorTest {
         // Public IPs should remain allowed
         assertTrue(UrlValidator.isValidWebUrl("https://8.8.8.8/video.mp4"))
         assertTrue(UrlValidator.isValidWebUrl("https://172.32.0.1/video.mp4"))
+
+        // Public domains starting with fc, fd, fe, or digits should NOT be falsely blocked as private IPs
+        assertTrue(UrlValidator.isValidWebUrl("https://fc2.com/video"))
+        assertTrue(UrlValidator.isValidWebUrl("https://video.fc2.com/content/123"))
+        assertTrue(UrlValidator.isValidWebUrl("https://fdroid.org/repo/app.apk"))
+        assertTrue(UrlValidator.isValidWebUrl("https://febspot.com/v/123"))
+        assertTrue(UrlValidator.isValidWebUrl("https://feature.fm/track/123"))
+        assertTrue(UrlValidator.isValidWebUrl("https://10.example.com/video.mp4"))
     }
 
     @Test

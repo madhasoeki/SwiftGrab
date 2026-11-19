@@ -140,50 +140,54 @@ object UrlValidator {
         if (lower == "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local") || lower.endsWith(".localdomain")) {
             return true
         }
-        if (lower == "::1" || lower == "0:0:0:0:0:0:0:1" || lower == "::" || lower == "0:0:0:0:0:0:0:0") {
-            return true
-        }
-        // IPv4 0.0.0.0/8 (routes to loopback on Android/Linux)
-        if (lower == "0.0.0.0" || lower.startsWith("0.")) return true
-        // IPv4 Loopback and RFC 1918 Private ranges
-        if (lower.startsWith("127.")) return true
-        if (lower.startsWith("10.")) return true
-        if (lower.startsWith("192.168.")) return true
-        if (lower.startsWith("169.254.")) return true
-        if (lower.startsWith("172.")) {
-            val parts = lower.split(".")
-            if (parts.size >= 2) {
-                val second = parts[1].toIntOrNull()
-                if (second != null && second in 16..31) {
-                    return true
-                }
-            }
-        }
-        // IPv6 Link-Local (fe80::/10: fe8*, fe9*, fea*, feb*)
-        if (lower.startsWith("fe80:") || lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
-            return true
-        }
-        // IPv6 Unique Local Address (fc00::/7: fc*, fd*)
-        if (lower.startsWith("fc") || lower.startsWith("fd")) {
-            return true
-        }
-        // IPv4-mapped IPv6 (::ffff:0:0/96)
-        if (lower.startsWith("::ffff:")) {
-            val v4 = lower.removePrefix("::ffff:")
-            if (v4 == "0.0.0.0" || v4.startsWith("0.") || v4.startsWith("127.") || v4.startsWith("10.") || v4.startsWith("192.168.") || v4.startsWith("169.254.")) {
+
+        // IPv6 addresses (must contain ':')
+        if (lower.contains(':')) {
+            if (lower == "::1" || lower == "0:0:0:0:0:0:0:1" || lower == "::" || lower == "0:0:0:0:0:0:0:0") {
                 return true
             }
-            if (v4.startsWith("172.")) {
-                val parts = v4.split(".")
-                if (parts.size >= 2) {
-                    val second = parts[1].toIntOrNull()
-                    if (second != null && second in 16..31) {
-                        return true
-                    }
-                }
+            // IPv4-mapped IPv6 (::ffff:0:0/96)
+            if (lower.startsWith("::ffff:")) {
+                val v4 = lower.removePrefix("::ffff:")
+                return isLocalOrPrivateIpv4(v4)
             }
+            // IPv6 Link-Local (fe80::/10: fe8*, fe9*, fea*, feb*)
+            if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
+                return true
+            }
+            // IPv6 Unique Local Address (fc00::/7: fc*, fd*)
+            if (lower.startsWith("fc") || lower.startsWith("fd")) {
+                return true
+            }
+            return false
         }
-        return false
+
+        // IPv4 addresses
+        return isLocalOrPrivateIpv4(lower)
+    }
+
+    private fun isLocalOrPrivateIpv4(host: String): Boolean {
+        val parts = host.split(".")
+        if (parts.size != 4) return false
+        val octets = parts.map { it.toIntOrNull() ?: return false }
+        if (octets.any { it !in 0..255 }) return false
+
+        val (o1, o2) = Pair(octets[0], octets[1])
+        return when {
+            // 0.0.0.0/8 (routes to loopback on Android/Linux)
+            o1 == 0 -> true
+            // 127.0.0.0/8 (loopback)
+            o1 == 127 -> true
+            // 10.0.0.0/8 (private)
+            o1 == 10 -> true
+            // 169.254.0.0/16 (link-local)
+            o1 == 169 && o2 == 254 -> true
+            // 172.16.0.0/12 (private: 172.16.0.0 - 172.31.255.255)
+            o1 == 172 && o2 in 16..31 -> true
+            // 192.168.0.0/16 (private)
+            o1 == 192 && o2 == 168 -> true
+            else -> false
+        }
     }
 
     /**
