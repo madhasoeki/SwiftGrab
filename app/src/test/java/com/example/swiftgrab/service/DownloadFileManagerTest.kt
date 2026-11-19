@@ -201,4 +201,43 @@ class DownloadFileManagerTest {
             )
         )
     }
+
+    @Test
+    fun `isPathWithinAllowedRoots handles Windows backslashes and mixed separators`() {
+        val windowsRoots = listOf(
+            "C:\\Users\\Public\\Downloads",
+            "D:/external/media"
+        )
+
+        assertTrue(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "C:\\Users\\Public\\Downloads\\video.mp4",
+                windowsRoots
+            )
+        )
+        assertTrue(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "C:/Users/Public/Downloads/sub/video.mp4",
+                windowsRoots
+            )
+        )
+        assertTrue(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "D:\\external\\media\\video.mp4",
+                windowsRoots
+            )
+        )
+        assertFalse(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "C:\\Users\\Public\\DownloadsBackup\\video.mp4",
+                windowsRoots
+            )
+        )
+        assertFalse(
+            DownloadFileManager.isPathWithinAllowedRoots(
+                "C:\\Windows\\System32\\calc.exe",
+                windowsRoots
+            )
+        )
+    }
 }

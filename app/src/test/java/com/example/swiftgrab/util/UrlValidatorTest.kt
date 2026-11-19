@@ -123,6 +123,57 @@ class UrlValidatorTest {
     }
 
     @Test
+    fun `isValidWebUrl rejects local, private, and loopback IPs and hosts`() {
+        assertFalse(UrlValidator.isValidWebUrl("http://localhost/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://localhost:8080/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://app.localhost/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://127.0.0.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://127.0.0.1:8000/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://127.255.0.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://10.0.0.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://10.254.1.1:8443/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://192.168.0.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://192.168.100.50/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://169.254.1.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://169.254.169.254/latest/meta-data/"))
+        assertFalse(UrlValidator.isValidWebUrl("https://172.16.0.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://172.24.1.1/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("https://172.31.255.255/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://[::1]/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://[::1]:8080/video.mp4"))
+        assertFalse(UrlValidator.isValidWebUrl("http://::1/video.mp4"))
+
+        // Public IPs should remain allowed
+        assertTrue(UrlValidator.isValidWebUrl("https://8.8.8.8/video.mp4"))
+        assertTrue(UrlValidator.isValidWebUrl("https://172.32.0.1/video.mp4"))
+    }
+
+    @Test
+    fun `isValidWebUrl rejects userinfo in URLs`() {
+        assertFalse(UrlValidator.isValidWebUrl("https://user:password@youtube.com/watch?v=123"))
+        assertFalse(UrlValidator.isValidWebUrl("https://user@x.com/status/123"))
+        assertFalse(UrlValidator.isValidWebUrl("https://user:pass@127.0.0.1/video.mp4"))
+    }
+
+    @Test
+    fun `extractUrl and extractUrls reject local IPs and userinfo`() {
+        assertNull(UrlValidator.extractUrl("Check out http://127.0.0.1:8080/video.mp4"))
+        assertNull(UrlValidator.extractUrl("Check out https://user:pass@example.com/video.mp4"))
+        assertNull(UrlValidator.extractUrl("Check out http://[::1]/video.mp4"))
+
+        val mixed = """
+            http://127.0.0.1/local.mp4
+            https://user:pass@example.com/cred.mp4
+            http://[::1]:8080/ipv6.mp4
+            https://www.youtube.com/watch?v=valid999
+        """.trimIndent()
+        assertEquals(
+            listOf("https://www.youtube.com/watch?v=valid999"),
+            UrlValidator.extractUrls(mixed)
+        )
+    }
+
+    @Test
     fun `extractDomain removes protocol and www prefix`() {
         assertEquals("youtube.com", UrlValidator.extractDomain("https://www.youtube.com/watch?v=abc"))
         assertEquals("vt.tiktok.com", UrlValidator.extractDomain("https://vt.tiktok.com/ZS2xyz/"))

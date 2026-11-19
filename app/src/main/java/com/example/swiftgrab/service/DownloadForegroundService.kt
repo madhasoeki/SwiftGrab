@@ -213,7 +213,11 @@ class DownloadForegroundService : Service() {
         repository.updateStatus(taskId, DownloadStatus.DOWNLOADING)
         val stagingDir = DownloadFileManager.getStagingDir(this, taskId)
         val preset = DownloadPreset.fromTask(task.formatLabel, task.audioOnly)
-        val cookiesFile = CookieStorageManager.getXCookiesFile(this)
+        val cookiesFile = if (CookieStorageManager.isXDomain(task.url)) {
+            CookieStorageManager.getXCookiesFile(this)
+        } else {
+            null
+        }
         val request = DownloadRequestBuilder.build(
             url = task.url,
             outputDir = stagingDir,

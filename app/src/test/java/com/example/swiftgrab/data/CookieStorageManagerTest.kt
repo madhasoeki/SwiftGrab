@@ -28,4 +28,32 @@ class CookieStorageManagerTest {
         assertFalse(CookieStorageManager.containsAuthTokens(null))
         assertFalse(CookieStorageManager.containsAuthTokens(""))
     }
+
+    @Test
+    fun `isXDomain recognizes valid X and Twitter domains and subdomains`() {
+        assertTrue(CookieStorageManager.isXDomain("https://x.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("https://www.x.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("https://mobile.x.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("http://twitter.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("https://api.twitter.com/1.1/endpoint"))
+        assertTrue(CookieStorageManager.isXDomain("https://t.co/abcXYZ"))
+        assertTrue(CookieStorageManager.isXDomain("https://fxtwitter.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("https://vxtwitter.com/user/status/12345"))
+        assertTrue(CookieStorageManager.isXDomain("https://sub.vxtwitter.com/user/status/12345"))
+    }
+
+    @Test
+    fun `isXDomain rejects non-X domains, subdomain spoofing, and invalid input`() {
+        assertFalse(CookieStorageManager.isXDomain("https://evil-x.com/status/123"))
+        assertFalse(CookieStorageManager.isXDomain("https://x.com.evil.com/status/123"))
+        assertFalse(CookieStorageManager.isXDomain("https://notx.com"))
+        assertFalse(CookieStorageManager.isXDomain("https://faketwitter.com"))
+        assertFalse(CookieStorageManager.isXDomain("https://youtube.com/watch?v=123"))
+        assertFalse(CookieStorageManager.isXDomain("https://instagram.com/reel/123"))
+        assertFalse(CookieStorageManager.isXDomain("https://x.com@evil.com/status/123"))
+        assertFalse(CookieStorageManager.isXDomain(""))
+        assertFalse(CookieStorageManager.isXDomain("   "))
+        assertFalse(CookieStorageManager.isXDomain(null))
+        assertFalse(CookieStorageManager.isXDomain("just text"))
+    }
 }

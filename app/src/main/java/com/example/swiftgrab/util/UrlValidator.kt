@@ -88,7 +88,8 @@ object UrlValidator {
     }
 
     /**
-     * Verifies that the given [url] is a valid HTTP or HTTPS URL and does not contain forbidden schemes.
+     * Verifies that the given [url] is a valid HTTP or HTTPS URL, does not contain forbidden schemes,
+     * does not contain userinfo, and does not target local/private/loopback IPs or localhost.
      */
     fun isValidWebUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
@@ -106,12 +107,69 @@ object UrlValidator {
             }
         }
 
-        // Host must exist after protocol
         val withoutProtocol = if (isHttps) trimmed.substring(8) else trimmed.substring(7)
-        val host = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' && it != ':' }
-        if (host.isBlank() || !host.contains('.')) return false
+        val authority = withoutProtocol.takeWhile { it != '/' && it != '?' && it != '#' }
+        if (authority.isBlank()) return false
+
+        // Reject userinfo (e.g., https://user:pass@host/ or https://user@host/)
+        if (authority.contains('@')) return false
+
+        val host = if (authority.startsWith('[')) {
+            val closeBracket = authority.indexOf(']')
+            if (closeBracket == -1) return false
+            authority.substring(0, closeBracket + 1)
+        } else {
+            authority.takeWhile { it != ':' }
+        }
+
+        if (host.isBlank()) return false
+
+        // Reject local/private/loopback IPs and localhost
+        if (isLocalOrPrivateHost(host)) return false
+
+        val cleanHost = host.removePrefix("[").removeSuffix("]")
+        if (!cleanHost.contains('.') && !cleanHost.contains(':')) return false
 
         return true
+    }
+
+    internal fun isLocalOrPrivateHost(host: String): Boolean {
+        val lower = host.lowercase().removePrefix("[").removeSuffix("]")
+        if (lower == "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local") || lower.endsWith(".localdomain")) {
+            return true
+        }
+        if (lower == "::1" || lower == "0:0:0:0:0:0:0:1" || lower == "::" || lower == "0:0:0:0:0:0:0:0") {
+            return true
+        }
+        if (lower.startsWith("127.")) return true
+        if (lower.startsWith("10.")) return true
+        if (lower.startsWith("192.168.")) return true
+        if (lower.startsWith("169.254.")) return true
+        if (lower.startsWith("172.")) {
+            val parts = lower.split(".")
+            if (parts.size >= 2) {
+                val second = parts[1].toIntOrNull()
+                if (second != null && second in 16..31) {
+                    return true
+                }
+            }
+        }
+        if (lower.startsWith("::ffff:")) {
+            val v4 = lower.removePrefix("::ffff:")
+            if (v4.startsWith("127.") || v4.startsWith("10.") || v4.startsWith("192.168.") || v4.startsWith("169.254.")) {
+                return true
+            }
+            if (v4.startsWith("172.")) {
+                val parts = v4.split(".")
+                if (parts.size >= 2) {
+                    val second = parts[1].toIntOrNull()
+                    if (second != null && second in 16..31) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
     }
 
     /**
@@ -124,9 +182,15 @@ object UrlValidator {
             trimmed.startsWith("http://", ignoreCase = true) -> trimmed.substring(7)
             else -> return trimmed
         }
-        return afterProtocol
-            .takeWhile { it != '/' && it != '?' && it != '#' && it != ':' }
-            .removePrefix("www.")
+        val authority = afterProtocol.takeWhile { it != '/' && it != '?' && it != '#' }
+        val withoutUser = authority.substringAfterLast('@')
+        val host = if (withoutUser.startsWith('[')) {
+            val close = withoutUser.indexOf(']')
+            if (close != -1) withoutUser.substring(0, close + 1) else withoutUser.takeWhile { it != ':' }
+        } else {
+            withoutUser.takeWhile { it != ':' }
+        }
+        return host.removePrefix("www.")
     }
 
     /**

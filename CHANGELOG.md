@@ -8,6 +8,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Keamanan
+- Penguatan WebView `XLoginDialog` dengan menonaktifkan akses berkas lokal (`allowFileAccess = false`, `allowContentAccess = false`), pembatasan navigasi hanya untuk skema HTTPS dan domain resmi/otentikasi, serta validasi token sesi (`auth_token`) sebelum menyimpan cookies.
+- Isolasi berkas `x_cookies.txt` hanya untuk domain resmi X/Twitter (`CookieStorageManager.isXDomain`).
+- Penonaktifan backup data aplikasi (`android:allowBackup="false"`) pada `AndroidManifest.xml`.
+- Penolakan alamat IP privat, loopback, localhost, dan kredensial userinfo pada `UrlValidator`.
+
+### Diperbaiki
+- Perbaikan normalisasi pemisah path sistem operasi silang (Windows `\` vs Linux `/`) pada `DownloadFileManager.isPathWithinAllowedRoots` dan `StorageHelper.resolvePathFromDocumentId`.
+
 ## [0.0.4] - 2026-11-15
 
 ### Ditambahkan

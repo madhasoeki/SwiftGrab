@@ -99,8 +99,11 @@ object DownloadFileManager {
     }
 
     internal fun isPathWithinAllowedRoots(canonicalPath: String, allowedRoots: List<String>): Boolean {
-        return allowedRoots.any { root ->
-            canonicalPath == root || canonicalPath.startsWith("$root${File.separator}")
+        val normPath = canonicalPath.replace('\\', '/')
+        val normRoots = allowedRoots.map { it.replace('\\', '/') }
+        return normRoots.any { root ->
+            val cleanRoot = root.trimEnd('/')
+            normPath == cleanRoot || normPath.startsWith("$cleanRoot/")
         }
     }
 
