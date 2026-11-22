@@ -8,6 +8,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-11-22
+
 ### Ditambahkan
 - Paket identitas merek lengkap **SwiftGrab** berbasis simbol **Meteor Catch** (`assets/logo/swiftgrab_logo.svg`, `swiftgrab_lockup_light.svg`, `swiftgrab_lockup_dark.svg`, dan `assets/logo/BRAND_GUIDELINES.md`).
 - Dukungan ikon aplikasi Android adaptif (`drawable/ic_launcher_foreground.xml`) serta ikon bertema monokrom Android 13+ (`drawable/ic_launcher_monochrome.xml`).
@@ -91,7 +93,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 ### Diperbaiki
 - Penyesuaian aturan ProGuard/R8 untuk `youtubedl-android` serta penyederhanaan tata letak dan aksesibilitas UI.
 
-[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/madhasoeki/SwiftGrab/compare/v0.0.2...v0.0.3
