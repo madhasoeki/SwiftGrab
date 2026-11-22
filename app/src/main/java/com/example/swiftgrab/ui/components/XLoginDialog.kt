@@ -17,11 +17,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,8 +35,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -56,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -99,79 +103,105 @@ fun XLoginDialog(
         Scaffold(
             modifier = modifier.fillMaxSize(),
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.x_login_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.btn_close),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    actions = {
-                        Button(
-                            onClick = {
-                                val cm = CookieManager.getInstance()
-                                val xCookies = cm.getCookie("https://x.com") ?: ""
-                                val twitterCookies = cm.getCookie("https://twitter.com") ?: ""
-                                val merged = when {
-                                    xCookies.isNotBlank() && twitterCookies.isNotBlank() -> "$xCookies; $twitterCookies"
-                                    xCookies.isNotBlank() -> xCookies
-                                    else -> twitterCookies
-                                }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.x_login_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = stringResource(R.string.x_login_subtitle),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.btn_close),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        },
+                        actions = {
+                            Button(
+                                onClick = {
+                                    val cm = CookieManager.getInstance()
+                                    val xCookies = cm.getCookie("https://x.com") ?: ""
+                                    val twitterCookies = cm.getCookie("https://twitter.com") ?: ""
+                                    val merged = when {
+                                        xCookies.isNotBlank() && twitterCookies.isNotBlank() -> "$xCookies; $twitterCookies"
+                                        xCookies.isNotBlank() -> xCookies
+                                        else -> twitterCookies
+                                    }
 
-                                if (CookieStorageManager.containsAuthTokens(merged)) {
-                                    CookieStorageManager.saveXCookies(context, merged)
-                                    Toast.makeText(
-                                        context,
-                                        resources.getString(R.string.x_login_success),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    onLoginSuccess()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Belum ada sesi login (auth_token) yang terdeteksi. Silakan login terlebih dahulu.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isAuthDetected) {
-                                    MaterialTheme.colorScheme.secondary
-                                } else {
-                                    MaterialTheme.colorScheme.primary
+                                    if (CookieStorageManager.containsAuthTokens(merged)) {
+                                        CookieStorageManager.saveXCookies(context, merged)
+                                        Toast.makeText(
+                                            context,
+                                            resources.getString(R.string.x_login_success),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        onLoginSuccess()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Belum ada sesi login (auth_token) yang terdeteksi. Silakan login terlebih dahulu.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 },
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = stringResource(R.string.x_login_save_btn),
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isAuthDetected) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                                    contentColor = if (isAuthDetected) {
+                                        MaterialTheme.colorScheme.onSecondary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .heightIn(min = 40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.x_login_save_btn),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
                     )
-                )
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
             }
         ) { paddingValues ->
             Column(
@@ -188,7 +218,7 @@ fun XLoginDialog(
                             .fillMaxWidth()
                             .height(3.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainer
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                     )
                 }
 
@@ -202,22 +232,29 @@ fun XLoginDialog(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.x_login_auth_detected),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                fontWeight = FontWeight.SemiBold
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.x_login_auth_detected),
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
                             )
                         }
                     }

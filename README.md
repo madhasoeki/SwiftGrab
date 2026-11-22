@@ -17,13 +17,13 @@
     <img src="https://github.com/madhasoeki/SwiftGrab/actions/workflows/release-apk.yml/badge.svg" alt="Release APK" />
   </a>
   <a href="https://github.com/madhasoeki/SwiftGrab/releases/latest">
-    <img src="https://img.shields.io/github/v/release/madhasoeki/SwiftGrab?color=38BDF8&logo=github" alt="Latest Release" />
+    <img src="https://img.shields.io/github/v/release/madhasoeki/SwiftGrab?color=F04A24&logo=github" alt="Latest Release" />
   </a>
   <a href="https://www.gnu.org/licenses/gpl-3.0">
-    <img src="https://img.shields.io/badge/License-GPLv3-34D399.svg" alt="License: GPLv3" />
+    <img src="https://img.shields.io/badge/License-GPLv3-22C58B.svg" alt="License: GPLv3" />
   </a>
   <a href="https://developer.android.com">
-    <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-38BDF8?logo=android&logoColor=white" alt="Android 8.0+" />
+    <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-F04A24?logo=android&logoColor=white" alt="Android 8.0+" />
   </a>
   <a href="https://github.com/madhasoeki/SwiftGrab">
     <img src="https://img.shields.io/badge/Ads-0%25%20(Bebas%20Iklan)-brightgreen" alt="Zero Ads" />
@@ -64,7 +64,7 @@ Dibangun menggunakan **Jetpack Compose** dan **Material Design 3 (M3)**, SwiftGr
 * 🔄 **Pembaruan Ekstraktor yt-dlp Mandiri:**
   * Perbarui biner `yt-dlp` langsung dari menu Pengaturan aplikasi tanpa perlu menunggu atau menginstal pembaruan APK baru.
 * 🎨 **Desain Elegan & Bersih:**
-  * Tema gelap kontras tinggi (*Deep Cobalt & Emerald Accent*), *Edge-to-Edge* penuh, angka kecepatan tabular monospasi (anti-kedip), dan target sentuh aksesibel.
+  * Tema gelap kontras tinggi (*Obsidian Ink & Signal Ember*), *Edge-to-Edge* penuh, angka kecepatan tabular monospasi (anti-kedip), dan target sentuh aksesibel.
 
 ---
 

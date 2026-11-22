@@ -5,11 +5,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,12 +17,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,21 +33,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.swiftgrab.R
-import com.example.swiftgrab.data.prefs.DownloadPreset
 import com.example.swiftgrab.ui.theme.SwiftGrabTheme
 import com.example.swiftgrab.util.UrlValidator
 
 /**
- * Banner kartu saran unduhan ketika tautan URL baru terdeteksi pada papan klip.
+ * Kartu saran unduhan "Signal Ember Catch Card" ketika tautan URL baru terdeteksi pada papan klip.
  */
 @Composable
 fun ClipboardSuggestionBanner(
@@ -68,59 +67,68 @@ fun ClipboardSuggestionBanner(
     ) {
         if (url != null) {
             val domain = UrlValidator.extractDomain(url)
+            val displayDomain = domain.ifBlank { url }
+            val accentColor = MaterialTheme.colorScheme.primary
 
             Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp)
+                    .padding(vertical = 4.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp)
+                        .drawBehind {
+                            val barWidthPx = 4.dp.toPx()
+                            val insetStartPx = 10.dp.toPx()
+                            val insetVerticalPx = 12.dp.toPx()
+                            val barHeightPx = (size.height - insetVerticalPx * 2f).coerceAtLeast(0f)
+                            val startX = if (layoutDirection == LayoutDirection.Rtl) {
+                                size.width - insetStartPx - barWidthPx
+                            } else {
+                                insetStartPx
+                            }
+                            drawRoundRect(
+                                color = accentColor,
+                                topLeft = Offset(startX, insetVerticalPx),
+                                size = Size(barWidthPx, barHeightPx),
+                                cornerRadius = CornerRadius(barWidthPx / 2f, barWidthPx / 2f)
+                            )
+                        }
+                        .padding(start = 24.dp, end = 14.dp, top = 14.dp, bottom = 14.dp)
                 ) {
-                    // Header Row: Paste icon, detected info, dismiss button
+                    // Header: brand icon tile, 2-line label + domain hierarchy, dismiss action
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        val clipboardBannerTitle = stringResource(R.string.clipboard_banner_title)
+                        SwiftGrabAppIconTile(size = 38.dp)
 
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.ContentPaste,
-                                contentDescription = clipboardBannerTitle,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(18.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.clipboard_banner_title),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = displayDomain,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Text(
-                            text = domain.ifBlank { url },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f)
-                                .semantics {
-                                    contentDescription = "$clipboardBannerTitle: ${domain.ifBlank { url }}"
-                                }
-                        )
 
                         IconButton(
                             onClick = onDismiss,
@@ -135,9 +143,9 @@ fun ClipboardSuggestionBanner(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Action buttons
+                    // Action buttons (48dp touch target)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -149,6 +157,7 @@ fun ClipboardSuggestionBanner(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -161,7 +170,9 @@ fun ClipboardSuggestionBanner(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = stringResource(R.string.btn_download_video),
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2
                             )
                         }
 
@@ -172,6 +183,7 @@ fun ClipboardSuggestionBanner(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -184,7 +196,9 @@ fun ClipboardSuggestionBanner(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = stringResource(R.string.btn_download_audio),
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2
                             )
                         }
                     }
@@ -194,16 +208,34 @@ fun ClipboardSuggestionBanner(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(name = "Clipboard Banner Light", showBackground = true)
 @Composable
-private fun ClipboardSuggestionBannerPreview() {
+private fun ClipboardSuggestionBannerLightPreview() {
+    SwiftGrabTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ClipboardSuggestionBanner(
+                url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                onDownloadVideo = {},
+                onDownloadAudio = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "Clipboard Banner Dark", showBackground = true)
+@Composable
+private fun ClipboardSuggestionBannerDarkPreview() {
     SwiftGrabTheme(darkTheme = true) {
-        ClipboardSuggestionBanner(
-            url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            onDownloadVideo = {},
-            onDownloadAudio = {},
-            onDismiss = {},
-            modifier = Modifier.padding(16.dp)
-        )
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ClipboardSuggestionBanner(
+                url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                onDownloadVideo = {},
+                onDownloadAudio = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
     }
 }

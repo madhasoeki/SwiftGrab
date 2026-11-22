@@ -8,6 +8,20 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/) dan
 
 ## [Unreleased]
 
+### Ditambahkan
+- Paket identitas merek lengkap **SwiftGrab** berbasis simbol **Meteor Catch** (`assets/logo/swiftgrab_logo.svg`, `swiftgrab_lockup_light.svg`, `swiftgrab_lockup_dark.svg`, dan `assets/logo/BRAND_GUIDELINES.md`).
+- Dukungan ikon aplikasi Android adaptif (`drawable/ic_launcher_foreground.xml`) serta ikon bertema monokrom Android 13+ (`drawable/ic_launcher_monochrome.xml`).
+- Aset fondasi desain **Meteor Catch**: font **Montserrat** berlisensi SIL OFL 1.1 (`res/font/montserrat_{medium,semibold,bold}.otf`), skala tipografi & bentuk (`Type.kt`, `Shape.kt`), vektor merek dalam aplikasi (`ic_swiftgrab_symbol_{arc,meteor}.xml`, `ic_swiftgrab_wordmark.xml`, `ic_stat_swiftgrab.xml`), komponen bersama `BrandMark.kt` (`SwiftGrabSymbol`, `SwiftGrabAppIconTile`, `SwiftGrabWordmark`, `SwiftGrabHorizontalLockup`, `SwiftGrabPresetOptionCard`), serta pengujian UI Robolectric (`BrandAndSheetsUiTest.kt`).
+
+### Diubah
+- Pembaruan ikon peluncur (*launcher icon*) aplikasi di seluruh densitas (`mdpi`–`xxxhdpi`) ke desain **Meteor Catch** dengan latar `#111318`.
+- Penyelarasan palet tema Material Design 3 aplikasi (`Color.kt`, `Theme.kt`, `DESIGN.md`, dan `README.md`) dari *Deep Cobalt & Emerald* ke skema **Obsidian Ink & Signal Ember** lengkap dengan token `surfaceContainer*`, `inverse*`, `tertiaryContainer`/`errorContainer`, `android:windowBackground` anti-kilatan *cold start* (`themes.xml` & `values-night/themes.xml`), serta penyesuaian kontras WCAG AA pada mode terang (`secondary` `#0D7A54`, `tertiary` `#9A6000`).
+- Perombakan menyeluruh antarmuka Jetpack Compose selaras **Meteor Catch**: `TopAppBar` rata kiri dengan `SwiftGrabHorizontalLockup`, `EmptyStateView` berbingkai busur orbital, kartu saran papan klip *Signal Ember Catch Card* (`ClipboardSuggestionBanner`), kartu tugas ber-border kontekstual dengan ikon status non-warna & metrik tabular (`DownloadTaskCard`), serta tata letak baru pada `QuickFormatSheet`, `SettingsBottomSheet` (dengan kartu identitas merek dan hierarki CTA), dan `UpdateAvailableDialog`.
+- Penyelarasan krom sistem: ikon Quick Settings Tile (`QuickClipboardTileService`) dan notifikasi unduhan/pembaruan (`DownloadForegroundService`, `AppUpdateManager`) kini memakai vektor resmi `ic_stat_swiftgrab` dengan aksen warna `#F04A24`.
+
+### Diperbaiki
+- Perbaikan kontras warna teks tombol **Simpan & Selesai** pada `XLoginDialog` agar menggunakan `onSecondary` saat sesi login X terdeteksi (`isAuthDetected`).
+
 ## [0.0.5] - 2026-11-19
 
 ### Keamanan

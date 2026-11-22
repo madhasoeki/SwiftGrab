@@ -1,30 +1,28 @@
 package com.example.swiftgrab.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,8 +30,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,13 +41,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -92,6 +84,9 @@ fun QuickFormatSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline)
+        },
         modifier = modifier
     ) {
         QuickFormatSheetContent(
@@ -106,7 +101,7 @@ fun QuickFormatSheet(
 }
 
 @Composable
-private fun QuickFormatSheetContent(
+internal fun QuickFormatSheetContent(
     url: String,
     selectedPreset: DownloadPreset,
     metadataState: QuickFormatMetadataState,
@@ -120,28 +115,16 @@ private fun QuickFormatSheetContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 28.dp)
     ) {
-        // Header: Title & detected link domain
+        // Header: Brand icon tile, title & detected link domain
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Download,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            SwiftGrabAppIconTile(size = 42.dp)
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -151,6 +134,7 @@ private fun QuickFormatSheetContent(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Rounded.Link,
@@ -188,7 +172,7 @@ private fun QuickFormatSheetContent(
                 .selectableGroup()
         ) {
             DownloadPreset.entries.forEach { preset ->
-                PresetOptionCard(
+                SwiftGrabPresetOptionCard(
                     preset = preset,
                     isSelected = preset == selectedPreset,
                     onClick = { onSelectPreset(preset) }
@@ -206,9 +190,10 @@ private fun QuickFormatSheetContent(
         ) {
             TextButton(
                 onClick = onDismiss,
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
             ) {
                 Text(
                     text = stringResource(R.string.btn_cancel),
@@ -226,7 +211,7 @@ private fun QuickFormatSheetContent(
                 ),
                 modifier = Modifier
                     .weight(1.5f)
-                    .height(48.dp)
+                    .heightIn(min = 48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Download,
@@ -251,9 +236,9 @@ private fun MediaPreviewCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
@@ -264,18 +249,22 @@ private fun MediaPreviewCard(
         ) {
             when (metadataState) {
                 is QuickFormatMetadataState.Loading -> {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 88.dp, height = 50.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.size(width = 96.dp, height = 54.dp)
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -329,31 +318,7 @@ private fun MediaPreviewCard(
                             }
                             val durationLabel = MediaMetadataExtractor.formatDuration(metadata.durationSeconds)
                             if (durationLabel.isNotEmpty()) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Schedule,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = durationLabel,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Medium
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
+                                DurationBadge(durationLabel = durationLabel)
                             }
                         }
                     }
@@ -382,6 +347,37 @@ private fun MediaPreviewCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DurationBadge(
+    durationLabel: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = MaterialTheme.shapes.extraSmall,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = durationLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -419,165 +415,136 @@ internal fun PreviewThumbnail(
     onImageError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .size(width = 88.dp, height = 50.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!thumbnailUrl.isNullOrBlank() && !imageLoadFailed) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onSuccess = { onImageSuccess() },
-                onError = { onImageError() },
-                modifier = Modifier.matchParentSize()
-            )
-        }
-        if (thumbnailUrl.isNullOrBlank() || imageLoadFailed || !imageLoaded) {
-            Icon(
-                imageVector = Icons.Rounded.VideoLibrary,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
-}
-
-/**
- * Kartu baris pilihan preset format unduhan pada QuickFormatSheet.
- */
-@Composable
-private fun PresetOptionCard(
-    preset: DownloadPreset,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val icon: ImageVector = when (preset) {
-        DownloadPreset.BEST_VIDEO -> Icons.Rounded.HighQuality
-        DownloadPreset.DATA_SAVER -> Icons.Rounded.Savings
-        DownloadPreset.AUDIO_ONLY -> Icons.Rounded.Audiotrack
-    }
-
-    val cardColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainer
-    }
-
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.outlineVariant
-    }
-
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = cardColor,
-        border = BorderStroke(1.dp, borderColor),
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .selectable(
-                selected = isSelected,
-                role = Role.RadioButton,
-                onClick = onClick
-            )
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier.size(width = 96.dp, height = 54.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .fillMaxWidth()
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Text(
-                text = preset.displayTitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-
-            RadioButton(
-                selected = isSelected,
-                onClick = null,
-                colors = RadioButtonDefaults.colors(
-                    selectedColor = MaterialTheme.colorScheme.primary,
-                    unselectedColor = MaterialTheme.colorScheme.outline
+            if (!thumbnailUrl.isNullOrBlank() && !imageLoadFailed) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbnailUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { onImageSuccess() },
+                    onError = { onImageError() },
+                    modifier = Modifier.matchParentSize()
                 )
+            }
+            if (thumbnailUrl.isNullOrBlank() || imageLoadFailed || !imageLoaded) {
+                Icon(
+                    imageVector = Icons.Rounded.VideoLibrary,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickFormatSheetPreviewContainer(
+    darkTheme: Boolean,
+    url: String,
+    selectedPreset: DownloadPreset,
+    metadataState: QuickFormatMetadataState
+) {
+    SwiftGrabTheme(darkTheme = darkTheme) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            QuickFormatSheetContent(
+                url = url,
+                selectedPreset = selectedPreset,
+                metadataState = metadataState,
+                onSelectPreset = {},
+                onStartDownload = {},
+                onDismiss = {}
             )
         }
     }
 }
 
-@Preview(showBackground = true)
+@Preview(name = "QuickFormatSheet Loaded Dark", showBackground = true)
 @Composable
 private fun QuickFormatSheetLoadedPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            QuickFormatSheetContent(
-                url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                selectedPreset = DownloadPreset.BEST_VIDEO,
-                metadataState = QuickFormatMetadataState.Loaded(
-                    MediaMetadata(
-                        title = "Jetpack Compose Material 3 Adaptive Layout Tutorial",
-                        thumbnailUrl = null,
-                        durationSeconds = 754L
-                    )
-                ),
-                onSelectPreset = {},
-                onStartDownload = {},
-                onDismiss = {}
+    QuickFormatSheetPreviewContainer(
+        darkTheme = true,
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        selectedPreset = DownloadPreset.BEST_VIDEO,
+        metadataState = QuickFormatMetadataState.Loaded(
+            MediaMetadata(
+                title = "Jetpack Compose Material 3 Adaptive Layout Tutorial",
+                thumbnailUrl = null,
+                durationSeconds = 754L
             )
-        }
-    }
+        )
+    )
 }
 
-@Preview(showBackground = true)
+@Preview(name = "QuickFormatSheet Loaded Light", showBackground = true)
+@Composable
+private fun QuickFormatSheetLoadedLightPreview() {
+    QuickFormatSheetPreviewContainer(
+        darkTheme = false,
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        selectedPreset = DownloadPreset.BEST_VIDEO,
+        metadataState = QuickFormatMetadataState.Loaded(
+            MediaMetadata(
+                title = "Jetpack Compose Material 3 Adaptive Layout Tutorial",
+                thumbnailUrl = null,
+                durationSeconds = 754L
+            )
+        )
+    )
+}
+
+@Preview(name = "QuickFormatSheet Loading Dark", showBackground = true)
 @Composable
 private fun QuickFormatSheetLoadingPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            QuickFormatSheetContent(
-                url = "https://x.com/example/status/1234567890",
-                selectedPreset = DownloadPreset.DATA_SAVER,
-                metadataState = QuickFormatMetadataState.Loading,
-                onSelectPreset = {},
-                onStartDownload = {},
-                onDismiss = {}
-            )
-        }
-    }
+    QuickFormatSheetPreviewContainer(
+        darkTheme = true,
+        url = "https://x.com/example/status/1234567890",
+        selectedPreset = DownloadPreset.DATA_SAVER,
+        metadataState = QuickFormatMetadataState.Loading
+    )
 }
 
-@Preview(showBackground = true)
+@Preview(name = "QuickFormatSheet Loading Light", showBackground = true)
+@Composable
+private fun QuickFormatSheetLoadingLightPreview() {
+    QuickFormatSheetPreviewContainer(
+        darkTheme = false,
+        url = "https://x.com/example/status/1234567890",
+        selectedPreset = DownloadPreset.DATA_SAVER,
+        metadataState = QuickFormatMetadataState.Loading
+    )
+}
+
+@Preview(name = "QuickFormatSheet Unavailable Dark", showBackground = true)
 @Composable
 private fun QuickFormatSheetUnavailablePreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            QuickFormatSheetContent(
-                url = "https://example.com/media/clip.mp4",
-                selectedPreset = DownloadPreset.AUDIO_ONLY,
-                metadataState = QuickFormatMetadataState.Unavailable,
-                onSelectPreset = {},
-                onStartDownload = {},
-                onDismiss = {}
-            )
-        }
-    }
+    QuickFormatSheetPreviewContainer(
+        darkTheme = true,
+        url = "https://example.com/media/clip.mp4",
+        selectedPreset = DownloadPreset.AUDIO_ONLY,
+        metadataState = QuickFormatMetadataState.Unavailable
+    )
+}
+
+@Preview(name = "QuickFormatSheet Unavailable Light", showBackground = true)
+@Composable
+private fun QuickFormatSheetUnavailableLightPreview() {
+    QuickFormatSheetPreviewContainer(
+        darkTheme = false,
+        url = "https://example.com/media/clip.mp4",
+        selectedPreset = DownloadPreset.AUDIO_ONLY,
+        metadataState = QuickFormatMetadataState.Unavailable
+    )
 }
