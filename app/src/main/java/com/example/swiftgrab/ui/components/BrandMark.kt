@@ -258,7 +258,7 @@ fun SwiftGrabPresetOptionCard(
                 onClick = null,
                 colors = RadioButtonDefaults.colors(
                     selectedColor = MaterialTheme.colorScheme.primary,
-                    unselectedColor = MaterialTheme.colorScheme.outline
+                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
         }

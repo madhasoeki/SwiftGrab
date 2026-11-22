@@ -4,18 +4,11 @@
 
 ## 1. Ide & Arsitektur Logo
 - **Ide Utama (*Meteor Catch*):** Busur penangkap (*Obsidian Ink*) yang menyongsong komet/tetesan 45° (*Signal Ember* / *Ember Glow*) — melambangkan tangkapan instan (*Zero-Paste 1-Tap*) yang cepat, terarah, dan bebas gangguan.
-- **Varian Resmi:**
-  - **App Icon** (`swiftgrab-app-icon.svg`) — Simbol di atas ubin *squircle* `Obsidian Ink` (`#111318`).
-  - **Horizontal Lockup** (`swiftgrab-horizontal-color.svg` / `-on-dark.svg`) — Lockup utama untuk README, header web, dan banner rilis.
-  - **Stacked Lockup** (`swiftgrab-stacked-color.svg` / `-on-dark.svg`) — Untuk ruang persegi, kartu rilis, dan media sosial.
-  - **Symbol-Only** (`swiftgrab-symbol-color.svg` / `-on-dark.svg` / `-black.svg` / `-white.svg` / `-mono-f04a24.svg`) — Avatar, badge, dan ikon aplikasi.
-  - **Wordmark-Only** (`swiftgrab-wordmark-dark.svg` / `-white.svg`) — Saat simbol sudah tampil di dekatnya.
-- **Lokasi File:**
-  - Master VectorCraft (`.vectorcraft`): `out/logo-kit/source/`
-  - Digital SVG & PNG (sRGB): `out/logo-kit/digital/`
-  - Paket Web & Favicon (`favicon.ico`, PWA, `site.webmanifest`): `out/logo-kit/digital/web-icons/`
-  - Print Vector PDF: `out/logo-kit/print/`
-  - Aset Repositori Aktif: `assets/logo/`
+- **Varian & Aset Repositori (`assets/logo/`):**
+  - **Simbol Utama (Vektor & Raster):** [`swiftgrab_logo.svg`](swiftgrab_logo.svg) dan [`swiftgrab_logo.png`](swiftgrab_logo.png) — Simbol *Meteor Catch* (`Obsidian Ink` + `Signal Ember`).
+  - **Horizontal Lockup (Light & Dark):** [`swiftgrab_lockup_light.svg`](swiftgrab_lockup_light.svg) (untuk latar terang/README) dan [`swiftgrab_lockup_dark.svg`](swiftgrab_lockup_dark.svg) (untuk latar gelap).
+  - **Lembar Pamer Merek (*Brand Showcase*):** [`swiftgrab_logo_full_mockup.png`](swiftgrab_logo_full_mockup.png).
+  - **Ikon Aplikasi Android (Sumber Kode Aplikasi):** `app/src/main/res/drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`, `ic_stat_swiftgrab.xml`, `ic_swiftgrab_symbol_arc.xml`, `ic_swiftgrab_symbol_meteor.xml`, `ic_swiftgrab_wordmark.xml`, serta aset raster `app/src/main/res/mipmap-*/`.
 
 ## 2. Zona Aman (*Clear Space*)
 Sisakan ruang kosong minimal **1 × $u$** di seluruh sisi logo, dengan **$u$ = lebar ketebalan lengan busur penangkap** (`36 pt` pada kanvas simbol `256 × 256`, atau setara **~14% lebar simbol**). Ruang aman ini selalu mengikuti skala logo secara proporsional.

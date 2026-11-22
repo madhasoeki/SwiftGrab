@@ -123,170 +123,177 @@ internal fun UpdateAvailableDialogContent(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 22.dp)
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SwiftGrabAppIconTile(size = 52.dp)
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = stringResource(R.string.update_dialog_title, updateInfo.versionName),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
-                    )
-                ) {
-                    val sizeText = if (updateInfo.apkSizeBytes > 0L) {
-                        " • ${formatMegabytes(updateInfo.apkSizeBytes)}"
-                    } else {
-                        ""
-                    }
-                    Text(
-                        text = "v$currentVersion → v${updateInfo.versionName}$sizeText",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = stringResource(R.string.update_dialog_changelog_label),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 72.dp, max = 190.dp)
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(12.dp)
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    SwiftGrabAppIconTile(size = 52.dp)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = updateInfo.changelog,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.update_dialog_title, updateInfo.versionName),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
                     )
-                }
-            }
-
-            when (effectiveDownloadState) {
-                is ApkDownloadState.Downloading -> {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    val percent = (effectiveDownloadState.progress * 100f).toInt().coerceIn(0, 100)
-                    val downloadedLabel = formatMegabytes(effectiveDownloadState.downloadedBytes)
-                    val totalLabel = if (effectiveDownloadState.totalBytes > 0L) {
-                        " / ${formatMegabytes(effectiveDownloadState.totalBytes)}"
-                    } else {
-                        ""
-                    }
-
-                    if (effectiveDownloadState.totalBytes > 0L) {
-                        LinearProgressIndicator(
-                            progress = { effectiveDownloadState.progress.coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            strokeCap = StrokeCap.Round
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            strokeCap = StrokeCap.Round
-                        )
-                    }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
+                        )
+                    ) {
+                        val sizeText = if (updateInfo.apkSizeBytes > 0L) {
+                            " • ${formatMegabytes(updateInfo.apkSizeBytes)}"
+                        } else {
+                            ""
+                        }
+                        Text(
+                            text = "v$currentVersion → v${updateInfo.versionName}$sizeText",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(R.string.update_dialog_changelog_label),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 72.dp, max = 190.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.update_downloading_desc),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (effectiveDownloadState.totalBytes > 0L) {
-                                "$percent% ($downloadedLabel$totalLabel)"
-                            } else {
-                                downloadedLabel
-                            },
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            text = updateInfo.changelog,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                is ApkDownloadState.ReadyToInstall -> {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StatusNoticeBanner(
-                        icon = Icons.Rounded.CheckCircle,
-                        text = stringResource(R.string.update_ready_to_install_desc),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
-                        borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f),
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+
+                when (effectiveDownloadState) {
+                    is ApkDownloadState.Downloading -> {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        val percent = (effectiveDownloadState.progress * 100f).toInt().coerceIn(0, 100)
+                        val downloadedLabel = formatMegabytes(effectiveDownloadState.downloadedBytes)
+                        val totalLabel = if (effectiveDownloadState.totalBytes > 0L) {
+                            " / ${formatMegabytes(effectiveDownloadState.totalBytes)}"
+                        } else {
+                            ""
+                        }
+
+                        if (effectiveDownloadState.totalBytes > 0L) {
+                            LinearProgressIndicator(
+                                progress = { effectiveDownloadState.progress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                strokeCap = StrokeCap.Round
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                strokeCap = StrokeCap.Round
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.update_downloading_desc),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (effectiveDownloadState.totalBytes > 0L) {
+                                    "$percent% ($downloadedLabel$totalLabel)"
+                                } else {
+                                    downloadedLabel
+                                },
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                    is ApkDownloadState.ReadyToInstall -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        StatusNoticeBanner(
+                            icon = Icons.Rounded.CheckCircle,
+                            text = stringResource(R.string.update_ready_to_install_desc),
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                            borderColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f),
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    is ApkDownloadState.PermissionRequired -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        StatusNoticeBanner(
+                            icon = Icons.Rounded.Security,
+                            text = stringResource(R.string.update_permission_required_desc),
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+                            borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.30f),
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                    is ApkDownloadState.Failed -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        StatusNoticeBanner(
+                            icon = Icons.Rounded.ErrorOutline,
+                            text = effectiveDownloadState.message,
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                            borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.30f),
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    ApkDownloadState.Idle -> Unit
                 }
-                is ApkDownloadState.PermissionRequired -> {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StatusNoticeBanner(
-                        icon = Icons.Rounded.Security,
-                        text = stringResource(R.string.update_permission_required_desc),
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
-                        borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.30f),
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-                is ApkDownloadState.Failed -> {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StatusNoticeBanner(
-                        icon = Icons.Rounded.ErrorOutline,
-                        text = effectiveDownloadState.message,
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-                        borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.30f),
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-                ApkDownloadState.Idle -> Unit
             }
 
             Spacer(modifier = Modifier.height(18.dp))

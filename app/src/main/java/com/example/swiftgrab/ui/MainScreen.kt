@@ -859,7 +859,13 @@ private fun SwiftGrabAlertDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                content()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                ) {
+                    content()
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 

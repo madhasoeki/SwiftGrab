@@ -286,7 +286,11 @@ class BrandAndSheetsUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Mengunduh berkas APK pembaruan…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("50% (25.0 MB / 50.0 MB)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Mengunduh berkas APK pembaruan…")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("50% (25.0 MB / 50.0 MB)")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 }

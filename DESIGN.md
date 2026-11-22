@@ -1,6 +1,6 @@
 # DESIGN.md — Spesifikasi Desain UI/UX & Alur Interaksi SwiftGrab
 
-Dokumen `DESIGN.md` ini menjadi acuan desain visual, tata letak komponen, dan pengalaman pengguna (*User Experience*) bagi *AI Coding Agent* saat membangun antarmuka **SwiftGrab** menggunakan **Jetpack Compose** dan **Material Design 3 (M3)** yang selaras dengan identitas visual **Meteor Catch** (`out/logo-kit/BRAND_GUIDELINES.md`).
+Dokumen `DESIGN.md` ini menjadi acuan desain visual, tata letak komponen, dan pengalaman pengguna (*User Experience*) bagi *AI Coding Agent* saat membangun antarmuka **SwiftGrab** menggunakan **Jetpack Compose** dan **Material Design 3 (M3)** yang selaras dengan identitas visual **Meteor Catch** ([`assets/logo/BRAND_GUIDELINES.md`](assets/logo/BRAND_GUIDELINES.md)).
 
 ## 1. Filosofi Desain Utama
 1. **Zero-Friction, Zero-Paste (Kecepatan Satu Ketukan):** Pengguna tidak boleh dipaksa membuka aplikasi, mencari kolom input, menempelkan tautan, memilih belasan menu rumit, baru menekan tombol unduh. Unduhan harus bisa dimulai dalam **1 ketukan** langsung dari menu *Share* aplikasi lain atau otomatis saat aplikasi dibuka.
