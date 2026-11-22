@@ -714,7 +714,8 @@ object AppUpdateManager {
         )
 
         val notification = NotificationCompat.Builder(context, SwiftGrabApp.CHANNEL_UPDATES_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_stat_swiftgrab)
+            .setColor(0xFFF04A24.toInt())
             .setContentTitle(context.getString(R.string.update_dialog_title, info.versionName))
             .setContentText(context.getString(R.string.update_notification_text))
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog.take(280)))

@@ -122,4 +122,11 @@
     <string name="update_ready_to_install_desc">Berkas APK siap dipasang. Ketuk Install Sekarang jika pemasang sistem tidak terbuka otomatis.</string>
     <string name="update_notification_text">Versi baru SwiftGrab tersedia. Ketuk untuk mengunduh &amp; memasang.</string>
     <string name="toast_storage_permission_needed">Izin penyimpanan diperlukan untuk menyimpan langsung ke folder Download/SwiftGrab, atau pilih folder lewat Pengaturan.</string>
+
+    <!-- Brand Identity & Empty State Hints -->
+    <string name="cd_brand_logo">Logo SwiftGrab</string>
+    <string name="brand_tagline">Tangkap media instan tanpa iklan</string>
+    <string name="empty_feature_one_tap">Bagikan 1-Ketukan dari aplikasi mana saja</string>
+    <string name="empty_feature_clipboard">Deteksi otomatis tautan di papan klip</string>
+    <string name="btn_ytdlp_check_short">Periksa Update</string>
 </resources>

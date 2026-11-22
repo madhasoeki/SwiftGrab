@@ -736,7 +736,8 @@ class DownloadForegroundService : Service() {
         val openAppPendingIntent = createOpenAppPendingIntent()
 
         return NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_PROGRESS_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_stat_swiftgrab)
+            .setColor(NOTIFICATION_BRAND_COLOR)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.download_preparing))
             .setContentIntent(openAppPendingIntent)
@@ -765,7 +766,8 @@ class DownloadForegroundService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_PROGRESS_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_stat_swiftgrab)
+            .setColor(NOTIFICATION_BRAND_COLOR)
             .setContentTitle(title.ifBlank { getString(R.string.app_name) })
             .setContentText(contentText)
             .setProgress(100, percentInt, progress <= 0f)
@@ -796,6 +798,7 @@ class DownloadForegroundService : Service() {
         val percentInt = progress.toInt().coerceIn(0, 100)
         val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_PROGRESS_ID)
             .setSmallIcon(android.R.drawable.ic_media_pause)
+            .setColor(NOTIFICATION_BRAND_COLOR)
             .setContentTitle(title.ifBlank { getString(R.string.app_name) })
             .setContentText("${getString(R.string.download_paused)} ($percentInt%)")
             .setProgress(100, percentInt, false)
@@ -830,6 +833,7 @@ class DownloadForegroundService : Service() {
 
         val builder = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setColor(NOTIFICATION_BRAND_COLOR)
             .setContentTitle(getString(R.string.download_completed))
             .setContentText("${title.ifBlank { fallbackName }}$sizeFormatted")
             .setContentIntent(openAppPendingIntent)
@@ -870,6 +874,7 @@ class DownloadForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, SwiftGrabApp.CHANNEL_COMPLETE_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setColor(NOTIFICATION_BRAND_COLOR)
             .setContentTitle(getString(R.string.download_failed))
             .setContentText("${title.ifBlank { "Tugas unduhan" }}: $errorMessage")
             .setContentIntent(createOpenAppPendingIntent())
@@ -959,6 +964,7 @@ class DownloadForegroundService : Service() {
     companion object {
         private const val TAG = "DownloadForegroundSvc"
         const val NOTIFICATION_FOREGROUND_ID = 1001
+        private const val NOTIFICATION_BRAND_COLOR = 0xFFF04A24.toInt()
         const val MAX_CONCURRENT_DOWNLOADS = 2
         private const val WAKELOCK_TAG = "SwiftGrab::DownloadWakeLock"
         private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L

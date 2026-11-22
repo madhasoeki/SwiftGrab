@@ -1,7 +1,8 @@
 package com.example.swiftgrab.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,10 +16,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PauseCircleOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
@@ -52,7 +58,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -82,11 +87,18 @@ fun DownloadTaskCard(
     modifier: Modifier = Modifier,
     liveProgressProvider: () -> LiveProgress? = { null }
 ) {
+    val borderColor = when (task.status) {
+        DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
+
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
+        border = BorderStroke(1.dp, borderColor),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -94,7 +106,7 @@ fun DownloadTaskCard(
                 .fillMaxWidth()
                 .padding(14.dp)
         ) {
-            // Row 1: Thumbnail, Title, Format Badge
+            // Row 1: Thumbnail, Title, Format & Duration Badges
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -117,7 +129,7 @@ fun DownloadTaskCard(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -133,16 +145,16 @@ fun DownloadTaskCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Row 2: Progress Indicator
+            // Row 2: Progress Indicator (deferred read to isolate recomposition)
             val progressColor = when (task.status) {
                 DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
                 DownloadStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
                 DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
                 DownloadStatus.FAILED, DownloadStatus.CANCELED -> MaterialTheme.colorScheme.error
-                DownloadStatus.QUEUED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                DownloadStatus.QUEUED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
             }
 
-            val trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
             if (task.status == DownloadStatus.QUEUED) {
                 LinearProgressIndicator(
@@ -179,7 +191,7 @@ fun DownloadTaskCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Row 3: Tabular Metrics (Left) & Touch Action Controls (Right)
+            // Row 3: Non-color Status Icon + Tabular Metrics (Left) & Touch Action Controls (Right)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -222,16 +234,17 @@ private fun MediaThumbnail(
     audioOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val thumbShape = RoundedCornerShape(10.dp)
     val fallbackPainter = rememberCenteredIconPainter(
         imageVector = if (audioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.VideoLibrary,
-        iconSize = 20.dp,
+        iconSize = 22.dp,
         tint = MaterialTheme.colorScheme.onSurfaceVariant
     )
 
     Box(
         modifier = modifier
-            .size(width = 64.dp, height = 36.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .size(width = 80.dp, height = 46.dp)
+            .clip(thumbShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
@@ -246,6 +259,11 @@ private fun MediaThumbnail(
             fallback = fallbackPainter,
             contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize()
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, thumbShape)
         )
     }
 }
@@ -293,6 +311,7 @@ private fun DurationBadge(
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier
     ) {
         Row(
@@ -308,10 +327,7 @@ private fun DurationBadge(
             Spacer(modifier = Modifier.width(3.dp))
             Text(
                 text = formatted,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -324,24 +340,33 @@ private fun FormatBadge(
     audioOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val containerColor = if (audioOnly) {
+        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+    }
+    val borderColor = if (audioOnly) {
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.30f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    }
+    val contentColor = if (audioOnly) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = if (audioOnly) {
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-        } else {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        },
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
         modifier = modifier
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            color = if (audioOnly) {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            } else {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            },
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
         )
     }
 }
@@ -396,20 +421,43 @@ private fun MetricsText(
         DownloadStatus.QUEUED -> "Menunggu antrean…"
     }
 
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
-        color = when (status) {
-            DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
-            DownloadStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
-            DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
-            DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    val statusIcon = when (status) {
+        DownloadStatus.DOWNLOADING -> Icons.Rounded.Downloading
+        DownloadStatus.PAUSED -> Icons.Rounded.PauseCircleOutline
+        DownloadStatus.COMPLETED -> Icons.Rounded.CheckCircleOutline
+        DownloadStatus.FAILED -> Icons.Rounded.ErrorOutline
+        DownloadStatus.CANCELED -> Icons.Rounded.Cancel
+        DownloadStatus.QUEUED -> Icons.Rounded.Schedule
+    }
+
+    val statusColor = when (status) {
+        DownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
+        DownloadStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
+        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
+        DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
+        DownloadStatus.CANCELED, DownloadStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-    )
+    ) {
+        Icon(
+            imageVector = statusIcon,
+            contentDescription = null,
+            tint = statusColor,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = statusColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+    }
 }
 
 /**
@@ -436,17 +484,14 @@ private fun ActionButtons(
     ) {
         when (task.status) {
             DownloadStatus.DOWNLOADING -> {
-                IconButton(
+                PrimaryTaskActionButton(
                     onClick = onPause,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Pause,
-                        contentDescription = stringResource(R.string.cd_pause),
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                    icon = Icons.Rounded.Pause,
+                    contentDescription = stringResource(R.string.cd_pause),
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    iconSize = 20.dp
+                )
                 IconButton(
                     onClick = onCancel,
                     modifier = Modifier.size(48.dp)
@@ -455,22 +500,19 @@ private fun ActionButtons(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.cd_cancel),
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             DownloadStatus.PAUSED -> {
-                IconButton(
+                PrimaryTaskActionButton(
                     onClick = onResume,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(R.string.cd_resume),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                    icon = Icons.Rounded.PlayArrow,
+                    contentDescription = stringResource(R.string.cd_resume),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    iconSize = 22.dp
+                )
                 IconButton(
                     onClick = onCancel,
                     modifier = Modifier.size(48.dp)
@@ -479,22 +521,19 @@ private fun ActionButtons(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.cd_cancel),
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             DownloadStatus.COMPLETED -> {
-                IconButton(
+                PrimaryTaskActionButton(
                     onClick = onOpenFile,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(R.string.cd_play),
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                    icon = Icons.Rounded.PlayArrow,
+                    contentDescription = stringResource(R.string.cd_play),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    iconSize = 22.dp
+                )
                 IconButton(
                     onClick = onShareFile,
                     modifier = Modifier.size(48.dp)
@@ -513,23 +552,20 @@ private fun ActionButtons(
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
                         contentDescription = stringResource(R.string.cd_delete),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
             DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
-                IconButton(
+                PrimaryTaskActionButton(
                     onClick = onRetry,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = stringResource(R.string.cd_retry),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                    icon = Icons.Rounded.Refresh,
+                    contentDescription = stringResource(R.string.cd_retry),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    iconSize = 20.dp
+                )
                 IconButton(
                     onClick = onShowError,
                     modifier = Modifier.size(48.dp)
@@ -548,7 +584,7 @@ private fun ActionButtons(
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
                         contentDescription = stringResource(R.string.cd_delete),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -562,10 +598,40 @@ private fun ActionButtons(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.cd_cancel),
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PrimaryTaskActionButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    containerColor: Color,
+    contentColor: Color,
+    iconSize: Dp
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(containerColor)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = contentColor,
+                modifier = Modifier.size(iconSize)
+            )
         }
     }
 }
@@ -599,116 +665,123 @@ private fun parseDisplayError(errorMessage: String?): String {
     }
 }
 
-// Previews for all 4 states per DESIGN.md checklist
-@Preview(showBackground = true)
+private val previewDownloadingTask = DownloadTaskEntity(
+    id = "1",
+    url = "https://youtube.com/watch?v=demo",
+    title = "Amazing Nature 4K HDR Documentary Sample",
+    durationSeconds = 185L,
+    formatLabel = "MP4 1080p",
+    status = DownloadStatus.DOWNLOADING,
+    progress = 68.4f,
+    downloadedBytes = 45_200_000L,
+    totalBytes = 120_000_000L,
+    speed = "8.4 MB/s",
+    eta = "00:09"
+)
+
+private val previewPausedTask = DownloadTaskEntity(
+    id = "2",
+    url = "https://youtube.com/watch?v=demo2",
+    title = "Cyberpunk Music Mix 2026 Synthwave",
+    durationSeconds = 3725L,
+    formatLabel = "MP3",
+    audioOnly = true,
+    status = DownloadStatus.PAUSED,
+    progress = 42.0f,
+    downloadedBytes = 14_000_000L,
+    totalBytes = 35_000_000L
+)
+
+private val previewCompletedTask = DownloadTaskEntity(
+    id = "3",
+    url = "https://youtube.com/watch?v=demo3",
+    title = "Kotlin Jetpack Compose Clean Architecture Tutorial",
+    formatLabel = "MP4 720p",
+    status = DownloadStatus.COMPLETED,
+    progress = 100f,
+    downloadedBytes = 85_000_000L,
+    totalBytes = 85_000_000L,
+    outputPath = "/storage/emulated/0/Download/SwiftGrab/sample.mp4"
+)
+
+private val previewFailedTask = DownloadTaskEntity(
+    id = "4",
+    url = "https://youtube.com/watch?v=demo4",
+    title = "Restricted or Private Video Title",
+    formatLabel = "Auto",
+    status = DownloadStatus.FAILED,
+    progress = 12f,
+    errorMessage = "HTTP Error 403: Forbidden - Private video or login required"
+)
+
+@Composable
+private fun PreviewTaskCardWrapper(
+    darkTheme: Boolean,
+    task: DownloadTaskEntity
+) {
+    SwiftGrabTheme(darkTheme = darkTheme) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Box(modifier = Modifier.padding(12.dp)) {
+                DownloadTaskCard(
+                    task = task,
+                    onPause = {},
+                    onResume = {},
+                    onCancel = {},
+                    onDelete = {},
+                    onOpenFile = {},
+                    onShareFile = {},
+                    onRetry = {},
+                    onShowError = {}
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Downloading Dark", showBackground = true)
 @Composable
 private fun DownloadTaskCardDownloadingPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        DownloadTaskCard(
-            task = DownloadTaskEntity(
-                id = "1",
-                url = "https://youtube.com/watch?v=demo",
-                title = "Amazing Nature 4K HDR Documentary Sample",
-                durationSeconds = 185L,
-                formatLabel = "MP4 1080p",
-                status = DownloadStatus.DOWNLOADING,
-                progress = 68.4f,
-                downloadedBytes = 45_200_000L,
-                totalBytes = 120_000_000L,
-                speed = "8.4 MB/s",
-                eta = "00:09"
-            ),
-            onPause = {},
-            onResume = {},
-            onCancel = {},
-            onDelete = {},
-            onOpenFile = {},
-            onShareFile = {},
-            onRetry = {},
-            onShowError = {}
-        )
-    }
+    PreviewTaskCardWrapper(darkTheme = true, task = previewDownloadingTask)
 }
 
-@Preview(showBackground = true)
+@Preview(name = "Downloading Light", showBackground = true)
+@Composable
+private fun DownloadTaskCardDownloadingLightPreview() {
+    PreviewTaskCardWrapper(darkTheme = false, task = previewDownloadingTask)
+}
+
+@Preview(name = "Paused Dark", showBackground = true)
 @Composable
 private fun DownloadTaskCardPausedPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        DownloadTaskCard(
-            task = DownloadTaskEntity(
-                id = "2",
-                url = "https://youtube.com/watch?v=demo2",
-                title = "Cyberpunk Music Mix 2026 Synthwave",
-                durationSeconds = 3725L,
-                formatLabel = "MP3",
-                audioOnly = true,
-                status = DownloadStatus.PAUSED,
-                progress = 42.0f,
-                downloadedBytes = 14_000_000L,
-                totalBytes = 35_000_000L
-            ),
-            onPause = {},
-            onResume = {},
-            onCancel = {},
-            onDelete = {},
-            onOpenFile = {},
-            onShareFile = {},
-            onRetry = {},
-            onShowError = {}
-        )
-    }
+    PreviewTaskCardWrapper(darkTheme = true, task = previewPausedTask)
 }
 
-@Preview(showBackground = true)
+@Preview(name = "Paused Light", showBackground = true)
+@Composable
+private fun DownloadTaskCardPausedLightPreview() {
+    PreviewTaskCardWrapper(darkTheme = false, task = previewPausedTask)
+}
+
+@Preview(name = "Completed Dark", showBackground = true)
 @Composable
 private fun DownloadTaskCardCompletedPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        DownloadTaskCard(
-            task = DownloadTaskEntity(
-                id = "3",
-                url = "https://youtube.com/watch?v=demo3",
-                title = "Kotlin Jetpack Compose Clean Architecture Tutorial",
-                formatLabel = "MP4 720p",
-                status = DownloadStatus.COMPLETED,
-                progress = 100f,
-                downloadedBytes = 85_000_000L,
-                totalBytes = 85_000_000L,
-                outputPath = "/storage/emulated/0/Download/SwiftGrab/sample.mp4"
-            ),
-            onPause = {},
-            onResume = {},
-            onCancel = {},
-            onDelete = {},
-            onOpenFile = {},
-            onShareFile = {},
-            onRetry = {},
-            onShowError = {}
-        )
-    }
+    PreviewTaskCardWrapper(darkTheme = true, task = previewCompletedTask)
 }
 
-@Preview(showBackground = true)
+@Preview(name = "Completed Light", showBackground = true)
+@Composable
+private fun DownloadTaskCardCompletedLightPreview() {
+    PreviewTaskCardWrapper(darkTheme = false, task = previewCompletedTask)
+}
+
+@Preview(name = "Failed Dark", showBackground = true)
 @Composable
 private fun DownloadTaskCardFailedPreview() {
-    SwiftGrabTheme(darkTheme = true) {
-        DownloadTaskCard(
-            task = DownloadTaskEntity(
-                id = "4",
-                url = "https://youtube.com/watch?v=demo4",
-                title = "Restricted or Private Video Title",
-                formatLabel = "Auto",
-                status = DownloadStatus.FAILED,
-                progress = 12f,
-                errorMessage = "HTTP Error 403: Forbidden - Private video or login required"
-            ),
-            onPause = {},
-            onResume = {},
-            onCancel = {},
-            onDelete = {},
-            onOpenFile = {},
-            onShareFile = {},
-            onRetry = {},
-            onShowError = {}
-        )
-    }
+    PreviewTaskCardWrapper(darkTheme = true, task = previewFailedTask)
+}
+
+@Preview(name = "Failed Light", showBackground = true)
+@Composable
+private fun DownloadTaskCardFailedLightPreview() {
+    PreviewTaskCardWrapper(darkTheme = false, task = previewFailedTask)
 }
